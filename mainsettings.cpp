@@ -47,7 +47,7 @@ MainSettings::MainSettings(QWidget *parent) :
 {
   actionSettings = new QAction("Settings", this);
   actionExit = new QAction("Exit", this);
-  QString version("%1 version: %2\n").arg(QCoreApplication::applicationName()).arg(QCoreApplication::applicationVersion());
+  auto version = QString("%1 version: %2\n").arg(QCoreApplication::applicationName()).arg(QCoreApplication::applicationVersion());
   ui->setupUi(this);
   ui->tabWidget->setCurrentIndex(0);
   ui->aboutInfo->appendPlainText(version);
