@@ -44,7 +44,7 @@
 
 /* MainSettings */
 MainSettings::MainSettings(QWidget *parent) :
-    QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr)
+    QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr), soundClick(":/sounds/small2")
 {
     actionSettings = new QAction("Settings", this);
     actionExit = new QAction("Exit", this);
@@ -243,7 +243,8 @@ void MainSettings::configSave(void)
           ui->groupBoxPictureMode->isChecked() <<
           ui->fromIconsPath->isChecked() <<
           ui->lineEditIconsPath->text() <<
-          ui->lineEditStartup->text();
+          ui->lineEditStartup->text() <<
+          ui->checkBoxSound->isChecked();
 }
 
 void MainSettings::configLoad(void)
@@ -290,6 +291,10 @@ void MainSettings::configLoad(void)
     QString startcmd;
     ds >> startcmd;
     ui->lineEditStartup->setText(startcmd);
+
+    bool sound;
+    ds >> sound;
+    ui->checkBoxSound->setChecked(sound);
 }
 
 void MainSettings::cacheSaveItems(void)
@@ -455,14 +460,21 @@ void MainSettings::xkbStateChanged(int layout1)
         {
             if(state2 == LayoutState::StateFixed)
             {
+                // revert layout
                 xcb->switchXkbLayout(layout2);
             }
             else
-                if(state2 == LayoutState::StateNormal)
+            if(state2 == LayoutState::StateNormal)
+            {
+                item->setText(2, names.at(layout1));
+                item->setData(2, Qt::UserRole, layout1);
+
+                if(ui->checkBoxSound->isChecked())
                 {
-                    item->setText(2, names.at(layout1));
-                    item->setData(2, Qt::UserRole, layout1);
+                    if(soundClick.isFinished())
+                        soundClick.play();
                 }
+            }
         }
     }
     else

@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>2</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabAbout">
       <attribute name="title">
@@ -54,7 +54,7 @@
        <item>
         <widget class="QLabel" name="labelSystem">
          <property name="text">
-          <string>current info:</string>
+          <string>system info:</string>
          </property>
         </widget>
        </item>
@@ -62,6 +62,23 @@
         <widget class="QLabel" name="systemInfo">
          <property name="text">
           <string>info</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line_3">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBoxSound">
+         <property name="text">
+          <string> sound switch</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
          </property>
         </widget>
        </item>

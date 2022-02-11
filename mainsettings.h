@@ -27,6 +27,7 @@
 
 #include <QIcon>
 #include <QList>
+#include <QSound>
 #include <QObject>
 #include <QThread>
 #include <QWidget>
@@ -191,6 +192,7 @@ private:
     QAction* actionSettings;
     QAction* actionExit;
     QList<QIcon> layoutIcons;
+    QSound soundClick;
 };
 
 #endif // MAINSETTINGS_H
