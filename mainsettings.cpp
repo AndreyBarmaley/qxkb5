@@ -47,10 +47,10 @@ MainSettings::MainSettings(QWidget *parent) :
 {
   actionSettings = new QAction("Settings", this);
   actionExit = new QAction("Exit", this);
-
+  QString version("%1 version: %2\n").arg(QCoreApplication::applicationName()).arg(QCoreApplication::applicationVersion());
   ui->setupUi(this);
   ui->tabWidget->setCurrentIndex(0);
-  ui->aboutInfo->appendPlainText(QString("%1 version: %2\n").arg(QCoreApplication::applicationName()).arg(QCoreApplication::applicationVersion()));
+  ui->aboutInfo->appendPlainText(version);
   ui->aboutInfo->appendPlainText("Source code: https://github.com/AndreyBarmaley/qxkb5\n");
   ui->aboutInfo->appendPlainText("Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>\n");
 
@@ -75,7 +75,7 @@ MainSettings::MainSettings(QWidget *parent) :
 
   trayIcon = new QSystemTrayIcon(this);
   trayIcon->setIcon(layoutIcons.at(index));
-  trayIcon->setToolTip("QXKB5 version 0.1");
+  trayIcon->setToolTip(version);
   trayIcon->setContextMenu(menu);
   trayIcon->show();
 
