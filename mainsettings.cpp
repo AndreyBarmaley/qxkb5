@@ -155,6 +155,11 @@ void MainSettings::selectBackgroundColor(void)
     }
 }
 
+void MainSettings::allowPictureMode(bool f)
+{
+    emit iconAttributeNotify();
+}
+
 void MainSettings::allowIconsPath(bool f)
 {
     emit iconAttributeNotify();
@@ -233,6 +238,7 @@ void MainSettings::saveConfig(void)
           ui->lineEditBackgroundColor->text() <<
           ui->lineEditTextColor->text() <<
           ui->lineEditFont->text() <<
+          ui->groupBoxPictureMode->isChecked() <<
           ui->fromIconsPath->isChecked() <<
           ui->lineEditIconsPath->text();
 }
@@ -265,6 +271,10 @@ void MainSettings::loadConfig(void)
     ui->lineEditBackgroundColor->setText(backgroundColor);
     ui->lineEditTextColor->setText(textColor);
     ui->lineEditFont->setText(font);
+
+    bool picmode;
+    ds >> picmode;
+    ui->groupBoxPictureMode->setChecked(picmode);
 
     bool frompath;
     ds >> frompath;
@@ -441,11 +451,11 @@ void MainSettings::xkbStateChanged(int layout1)
                 xcb->switchXkbLayout(layout2);
             }
             else
-            if(state2 == LayoutState::StateNormal)
-            {
-                item->setText(2, names.at(layout1));
-                item->setData(2, Qt::UserRole, layout1);
-            }
+                if(state2 == LayoutState::StateNormal)
+                {
+                    item->setText(2, names.at(layout1));
+                    item->setData(2, Qt::UserRole, layout1);
+                }
         }
     }
     else
@@ -462,13 +472,19 @@ void MainSettings::xkbStateChanged(int layout1)
 
 QPixmap MainSettings::getLayoutIcon(const QString & layoutName)
 {
-    if(ui->fromIconsPath->isChecked())
+    if(ui->groupBoxPictureMode->isChecked())
     {
-        auto format = QString("%1.png").arg(layoutName.left(2)).toLower();
-        auto iconFile = QDir(ui->lineEditIconsPath->text()).absoluteFilePath(format);
-        QPixmap px(iconFile);
+        QPixmap px(QString(":/icons/").append(layoutName.left(2).toLower()));
         if(! px.isNull())
             return px;
+
+        if(ui->fromIconsPath->isChecked())
+        {
+            auto format = QString("%1.png").arg(layoutName.left(2)).toLower();
+            auto iconFile = QDir(ui->lineEditIconsPath->text()).absoluteFilePath(format);
+            if(px.load(iconFile))
+                return px;
+        }
     }
 
     QImage image(32, 32, QImage::Format_RGBA8888);

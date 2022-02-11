@@ -179,6 +179,7 @@ private slots:
     void iconAttributeChanged(void);
     void cacheItemClicked(QTreeWidgetItem*, int);
     void allowIconsPath(bool);
+    void allowPictureMode(bool);
 
 signals:
     void iconAttributeNotify(void);

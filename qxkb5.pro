@@ -4,7 +4,8 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT     += core gui
+# CONFIG += console
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -30,3 +31,8 @@ HEADERS  += mainsettings.h
 
 FORMS    += mainsettings.ui
 LIBS     += -lxkbcommon -lxkbcommon-x11 -lxcb-xkb -lxcb
+
+DISTFILES +=
+
+RESOURCES += \
+    resources.qrc
