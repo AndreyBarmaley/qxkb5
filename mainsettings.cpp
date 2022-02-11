@@ -24,6 +24,8 @@
 #include <QMenu>
 #include <QImage>
 #include <QColor>
+#include <QSound>
+#include <QSoundEffect>
 #include <QPainter>
 #include <QProcess>
 #include <QByteArray>
@@ -455,6 +457,7 @@ void MainSettings::xkbStateChanged(int layout1)
     {
         auto state2 = item->data(3, Qt::UserRole).toInt();
         auto layout2 = item->data(2, Qt::UserRole).toInt();
+        bool play = false;
 
         if(layout2 != layout1)
         {
@@ -468,13 +471,17 @@ void MainSettings::xkbStateChanged(int layout1)
             {
                 item->setText(2, names.at(layout1));
                 item->setData(2, Qt::UserRole, layout1);
-
-                if(ui->checkBoxSound->isChecked())
-                {
-                    if(soundClick.isFinished())
-                        soundClick.play();
-                }
+                play = true;
             }
+            else
+            if(state2 == LayoutState::StateFirst)
+                play = true;
+        }
+
+        if(play && ui->checkBoxSound->isChecked())
+        {
+            if(soundClick.isFinished())
+                soundClick.play();
         }
     }
     else
