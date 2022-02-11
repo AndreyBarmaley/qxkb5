@@ -157,6 +157,7 @@ void MainSettings::selectBackgroundColor(void)
 
 void MainSettings::allowPictureMode(bool f)
 {
+    ui->fromIconsPath->setEnabled(f);
     emit iconAttributeNotify();
 }
 

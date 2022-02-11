@@ -580,14 +580,14 @@
    </hints>
   </connection>
   <connection>
-   <sender>groupBoxPictureMode</sender>
+   <sender>fromIconsPath</sender>
    <signal>toggled(bool)</signal>
    <receiver>lineEditIconsPath</receiver>
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
      <x>199</x>
-     <y>220</y>
+     <y>214</y>
     </hint>
     <hint type="destinationlabel">
      <x>242</x>
@@ -596,14 +596,14 @@
    </hints>
   </connection>
   <connection>
-   <sender>groupBoxPictureMode</sender>
+   <sender>fromIconsPath</sender>
    <signal>toggled(bool)</signal>
    <receiver>pushButtonSelIconsPath</receiver>
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
      <x>199</x>
-     <y>220</y>
+     <y>214</y>
     </hint>
     <hint type="destinationlabel">
      <x>364</x>
@@ -720,6 +720,22 @@
     <hint type="destinationlabel">
      <x>199</x>
      <y>167</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>groupBoxPictureMode</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>fromIconsPath</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>220</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>214</y>
     </hint>
    </hints>
   </connection>
