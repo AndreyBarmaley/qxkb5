@@ -59,8 +59,8 @@ MainSettings::MainSettings(QWidget *parent) :
     xcb = new XcbEventsPool(this);
     xcb->initXkbLayouts();
 
-    mapLoadItems();
-    loadConfig();
+    cacheLoadItems();
+    configLoad();
 
     if(ui->checkBoxStartup)
     {
@@ -101,8 +101,8 @@ MainSettings::~MainSettings()
 
 void MainSettings::exitProgram(void)
 {
-    mapSaveItems();
-    saveConfig();
+    cacheSaveItems();
+    configSave();
     hide();
     close();
 }
@@ -221,7 +221,7 @@ void MainSettings::iconActivated(QSystemTrayIcon::ActivationReason reason)
         xcb->switchXkbLayout();
 }
 
-void MainSettings::saveConfig(void)
+void MainSettings::configSave(void)
 {
     auto localData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(localData);
@@ -244,7 +244,7 @@ void MainSettings::saveConfig(void)
           ui->lineEditIconsPath->text();
 }
 
-void MainSettings::loadConfig(void)
+void MainSettings::configLoad(void)
 {
     auto localData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(localData);
@@ -286,7 +286,7 @@ void MainSettings::loadConfig(void)
     ui->lineEditIconsPath->setText(iconpath);
 }
 
-void MainSettings::mapSaveItems(void)
+void MainSettings::cacheSaveItems(void)
 {
     auto localData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(localData);
@@ -333,7 +333,7 @@ void setHighlightStatusItem(QTreeWidgetItem* item, int state2)
     }
 }
 
-void MainSettings::mapLoadItems(void)
+void MainSettings::cacheLoadItems(void)
 {
     auto localData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(localData);
@@ -370,7 +370,7 @@ void MainSettings::mapLoadItems(void)
     }
 }
 
-QTreeWidgetItem* MainSettings::mapFindItem(const QString & class1, const QString & class2)
+QTreeWidgetItem* MainSettings::cacheFindItem(const QString & class1, const QString & class2)
 {
     auto items1 = ui->treeWidgetCache->findItems(class1, Qt::MatchFixedString, 0);
     auto items2 = ui->treeWidgetCache->findItems(class2, Qt::MatchFixedString, 1);
@@ -413,7 +413,7 @@ void MainSettings::activeWindowChanged(int win)
     auto layout1 = xcb->getXkbLayout();
     auto & names = xcb->getListNames();
 
-    auto item = mapFindItem(list.front(), list.back());
+    auto item = cacheFindItem(list.front(), list.back());
     if(item)
     {
         auto layout2 = item->data(2, Qt::UserRole).toInt();
@@ -439,7 +439,7 @@ void MainSettings::xkbStateChanged(int layout1)
     auto & names = xcb->getListNames();
     auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
 
-    auto item = mapFindItem(list.front(), list.back());
+    auto item = cacheFindItem(list.front(), list.back());
     if(item)
     {
         auto state2 = item->data(3, Qt::UserRole).toInt();
@@ -759,42 +759,42 @@ void XcbEventsPool::run(void)
                 }
             }
             else
-                if(xkbext->first_event == type)
+            if(xkbext->first_event == type)
+            {
+                auto xkbev = ev->pad0;
+                if(XCB_XKB_MAP_NOTIFY == xkbev)
                 {
-                    auto xkbev = ev->pad0;
-                    if(XCB_XKB_MAP_NOTIFY == xkbev)
-                    {
-                        //auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
-                        resetMapState = true;
-                    }
-                    else
-                        if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
-                        {
-                            auto kn = reinterpret_cast< xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
-                            if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
-                                resetMapState = true;
-                        }
-                        else
-                            if(xkbev == XCB_XKB_STATE_NOTIFY)
-                            {
-                                auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
-                                xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
-                                                      sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
-                                if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
-                                    emit xkbStateNotify(sn->group);
-                            }
-
-                    if(resetMapState)
-                    {
-                        // free state first
-                        xkbstate.reset();
-                        xkbmap.reset();
-
-                        // set new
-                        xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn, xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
-                        xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn, xkbdevid));
-                    }
+                    //auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
+                    resetMapState = true;
                 }
+                else
+                if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
+                {
+                    auto kn = reinterpret_cast< xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
+                    if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
+                        resetMapState = true;
+                }
+                else
+                if(xkbev == XCB_XKB_STATE_NOTIFY)
+                {
+                    auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
+                    xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
+                                                      sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+                    if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
+                        emit xkbStateNotify(sn->group);
+                }
+
+                if(resetMapState)
+                {
+                    // free state first
+                    xkbstate.reset();
+                    xkbmap.reset();
+
+                    // set new
+                    xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn, xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
+                    xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn, xkbdevid));
+                }
+            }
         }
 
         msleep(1);

@@ -159,11 +159,11 @@ protected:
     void showEvent(QShowEvent*) override;
     void hideEvent(QHideEvent*) override;
     QPixmap getLayoutIcon(const QString &);
-    QTreeWidgetItem* mapFindItem(const QString & class1, const QString & class2);
-    void mapSaveItems(void);
-    void mapLoadItems(void);
-    void saveConfig(void);
-    void loadConfig(void);
+    QTreeWidgetItem* cacheFindItem(const QString & class1, const QString & class2);
+    void cacheSaveItems(void);
+    void cacheLoadItems(void);
+    void configSave(void);
+    void configLoad(void);
     void initXkbLayoutIcons(bool f = false);
 
 private slots:
