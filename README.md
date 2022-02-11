@@ -1,5 +1,5 @@
 # qxkb5
-small xkb switcher based xcb and Qt5  
+Xkb switcher based xcb and Qt5  
 
 ### features
 - text or picture display mode
