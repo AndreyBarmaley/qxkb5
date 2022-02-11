@@ -475,9 +475,7 @@ QPixmap MainSettings::getLayoutIcon(const QString & layoutName)
 {
     if(ui->groupBoxPictureMode->isChecked())
     {
-        QPixmap px(QString(":/icons/").append(layoutName.left(2).toLower()));
-        if(! px.isNull())
-            return px;
+        QPixmap px;
 
         if(ui->fromIconsPath->isChecked())
         {
@@ -486,6 +484,9 @@ QPixmap MainSettings::getLayoutIcon(const QString & layoutName)
             if(px.load(iconFile))
                 return px;
         }
+
+        if(px.load(QString(":/icons/").append(layoutName.left(2).toLower())))
+            return px;
     }
 
     QImage image(32, 32, QImage::Format_RGBA8888);
