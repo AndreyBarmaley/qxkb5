@@ -739,6 +739,70 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>groupBoxPictureMode</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>backgroundTransparent</receiver>
+   <slot>setDisabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>220</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>86</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>groupBoxPictureMode</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>labelBackground</receiver>
+   <slot>setDisabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>220</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>75</x>
+     <y>57</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>groupBoxPictureMode</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>labelText</receiver>
+   <slot>setDisabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>220</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>51</x>
+     <y>115</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>groupBoxPictureMode</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>labelFont</receiver>
+   <slot>setDisabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>220</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>51</x>
+     <y>146</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>allowIconsPath(bool)</slot>
