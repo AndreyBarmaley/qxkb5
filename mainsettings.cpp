@@ -49,10 +49,11 @@ MainSettings::MainSettings(QWidget *parent) :
     actionSettings = new QAction("Settings", this);
     actionExit = new QAction("Exit", this);
 
-    auto version = QString("%1 version: %2\n").arg(QCoreApplication::applicationName()).arg(QCoreApplication::applicationVersion());
+    auto version = QString("%1 version: %2").arg(QCoreApplication::applicationName()).arg(QCoreApplication::applicationVersion());
     ui->setupUi(this);
     ui->tabWidget->setCurrentIndex(0);
     ui->aboutInfo->appendPlainText(version);
+    ui->aboutInfo->appendPlainText("\n");
     ui->aboutInfo->appendPlainText("Source code: https://github.com/AndreyBarmaley/qxkb5\n");
     ui->aboutInfo->appendPlainText("Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>\n");
 
