@@ -54,7 +54,7 @@
        <item>
         <widget class="QLabel" name="labelSystem">
          <property name="text">
-          <string>system info:</string>
+          <string>current info:</string>
          </property>
         </widget>
        </item>
@@ -68,7 +68,7 @@
        <item>
         <widget class="QCheckBox" name="checkBoxStartup">
          <property name="text">
-          <string>startup</string>
+          <string>startup cmd:</string>
          </property>
         </widget>
        </item>

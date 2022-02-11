@@ -242,7 +242,8 @@ void MainSettings::configSave(void)
           ui->lineEditFont->text() <<
           ui->groupBoxPictureMode->isChecked() <<
           ui->fromIconsPath->isChecked() <<
-          ui->lineEditIconsPath->text();
+          ui->lineEditIconsPath->text() <<
+          ui->lineEditStartup->text();
 }
 
 void MainSettings::configLoad(void)
@@ -285,6 +286,10 @@ void MainSettings::configLoad(void)
     QString iconpath;
     ds >> iconpath;
     ui->lineEditIconsPath->setText(iconpath);
+
+    QString startcmd;
+    ds >> startcmd;
+    ui->lineEditStartup->setText(startcmd);
 }
 
 void MainSettings::cacheSaveItems(void)
