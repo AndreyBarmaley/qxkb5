@@ -90,45 +90,49 @@ ReplyError<Reply> getReply1(std::function<Reply*(xcb_connection_t*, Cookie, xcb_
 
 struct XcbConnection
 {
+protected:
+    std::unique_ptr<xcb_connection_t, decltype(xcb_disconnect)*> conn;
+    std::unique_ptr<xkb_context, decltype(xkb_context_unref)*> xkbctx;
+    std::unique_ptr<xkb_keymap, decltype(xkb_keymap_unref)*> xkbmap;
+    std::unique_ptr<xkb_state, decltype(xkb_state_unref)*> xkbstate;
+    const xcb_query_extension_reply_t* xkbext;
+    xcb_window_t root;
+    xcb_atom_t symbolsNameAtom;
+    xcb_atom_t activeWindowAtom;
+    QStringList listNames;
+    int32_t xkbdevid;
+
 public:
     XcbConnection();
-    virtual ~XcbConnection();
+    virtual ~XcbConnection(){}
 
     void initXkbLayouts(void);
     int getXkbLayout(void);
     bool switchXkbLayout(int layout = -1);
+
     xcb_atom_t getAtom(const QString & name, bool create = true) const;
-    QString getAtomName(xcb_atom_t);
     xcb_window_t getActiveWindow(void);
     xcb_window_t getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
-    QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop);
+
+    QString getAtomName(xcb_atom_t);
     QString getSymbolsLabel(void);
+    QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop);
     const QStringList & getListNames(void);
 
     template<typename Reply, typename Cookie>
     ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
     {
-        return getReply1<Reply, Cookie>(func, conn, cookie);
+        return getReply1<Reply, Cookie>(func, conn.get(), cookie);
     }
 
 #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,NAME(conn,##__VA_ARGS__))
-
-protected:
-    xcb_connection_t* conn;
-    xcb_window_t root;
-    xcb_atom_t symbolsNameAtom;
-    xcb_atom_t activeWindowAtom;
-    QStringList listNames;
-    const struct xcb_query_extension_reply_t* xkbext;
-    std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> xkbctx;
-    std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*> xkbmap;
-    std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> xkbstate;
-    int32_t xkbdevid;
 };
 
 class XcbEventsPool : public QThread, public XcbConnection
 {
     Q_OBJECT
+
+    std::atomic<bool> shutdown;
 
 public:
     XcbEventsPool(QObject*);
@@ -140,9 +144,7 @@ protected:
 signals:
     void activeWindowNotify(int);
     void xkbStateNotify(int);
-
-private:
-    std::atomic<bool> shutdown;
+    void xkbStateResetNotify(void);
 };
 
 enum LayoutState { StateNormal, StateFirst, StateFixed };
@@ -150,6 +152,14 @@ enum LayoutState { StateNormal, StateFirst, StateFixed };
 class MainSettings : public QWidget
 {
     Q_OBJECT
+
+    Ui::MainSettings* ui;
+    XcbEventsPool* xcb;
+    QSystemTrayIcon* trayIcon;
+    QAction* actionSettings;
+    QAction* actionExit;
+    QList<QIcon> layoutIcons;
+    QSound soundClick;
 
 public:
     explicit MainSettings(QWidget *parent = 0);
@@ -184,15 +194,6 @@ private slots:
 
 signals:
     void iconAttributeNotify(void);
-
-private:
-    Ui::MainSettings* ui;
-    XcbEventsPool* xcb;
-    QSystemTrayIcon* trayIcon;
-    QAction* actionSettings;
-    QAction* actionExit;
-    QList<QIcon> layoutIcons;
-    QSound soundClick;
 };
 
 #endif // MAINSETTINGS_H

@@ -58,11 +58,6 @@ MainSettings::MainSettings(QWidget *parent) :
                                    "<p>Source code: <a href='%2'>%2</a></p>"
                                    "<p>Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
 
-    xcb = new XcbEventsPool(this);
-    xcb->initXkbLayouts();
-
-
-    cacheLoadItems();
     configLoad();
 
     if(ui->checkBoxStartup)
@@ -71,6 +66,11 @@ MainSettings::MainSettings(QWidget *parent) :
         process.start(ui->lineEditStartup->text());
         process.waitForFinished();
     }
+
+    xcb = new XcbEventsPool(this);
+    xcb->initXkbLayouts();
+
+    cacheLoadItems();
 
     QMenu* menu = new QMenu(this);
     menu->addAction(actionSettings);
@@ -547,14 +547,15 @@ void MainSettings::initXkbLayoutIcons(bool initXkbLayer)
 }
 
 /* XcbConnection */
-XcbConnection::XcbConnection() : conn(nullptr), root(XCB_WINDOW_NONE), symbolsNameAtom(XCB_ATOM_NONE), activeWindowAtom(XCB_ATOM_NONE),
-    xkbext(nullptr), xkbctx{ nullptr, xkb_context_unref }, xkbmap{ nullptr, xkb_keymap_unref }, xkbstate{ nullptr, xkb_state_unref }, xkbdevid(-1)
+XcbConnection::XcbConnection() :
+    conn{ xcb_connect(":0", nullptr), xcb_disconnect },
+    xkbctx{ nullptr, xkb_context_unref }, xkbmap{ nullptr, xkb_keymap_unref }, xkbstate{ nullptr, xkb_state_unref },
+    xkbext(nullptr), root(XCB_WINDOW_NONE), symbolsNameAtom(XCB_ATOM_NONE), activeWindowAtom(XCB_ATOM_NONE), xkbdevid(-1)
 {
-    conn = xcb_connect(":0", nullptr);
-    if(xcb_connection_has_error(conn))
+    if(xcb_connection_has_error(conn.get()))
         throw std::runtime_error("xcb_connect");
 
-    auto setup = xcb_get_setup(conn);
+    auto setup = xcb_get_setup(conn.get());
     if(! setup)
         throw std::runtime_error("xcb_get_setup");
 
@@ -565,16 +566,16 @@ XcbConnection::XcbConnection() : conn(nullptr), root(XCB_WINDOW_NONE), symbolsNa
     root = screen->root;
     activeWindowAtom = getAtom("_NET_ACTIVE_WINDOW");
 
-    xkbext = xcb_get_extension_data(conn, &xcb_xkb_id);
+    xkbext = xcb_get_extension_data(conn.get(), &xcb_xkb_id);
     if(! xkbext)
         throw std::runtime_error("xkb_get_extension_data");
 
-    auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, conn, XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
+    auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, conn.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
     if(xcbReply.error())
         throw std::runtime_error("xcb_xkb_use_extension");
 
-    xkbdevid = xkb_x11_get_core_keyboard_device_id(conn);
+    xkbdevid = xkb_x11_get_core_keyboard_device_id(conn.get());
     if(xkbdevid < 0)
         throw std::runtime_error("xkb_x11_get_core_keyboard_device_id");
 
@@ -582,11 +583,11 @@ XcbConnection::XcbConnection() : conn(nullptr), root(XCB_WINDOW_NONE), symbolsNa
     if(! xkbctx)
         throw std::runtime_error("xkb_context_new");
 
-    xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn, xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
+    xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn.get(), xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
     if(!xkbmap)
         throw std::runtime_error("xkb_x11_keymap_new_from_device");
 
-    xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn, xkbdevid));
+    xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn.get(), xkbdevid));
     if(!xkbstate)
         throw std::runtime_error("xkb_x11_state_new_from_device");
 
@@ -594,23 +595,18 @@ XcbConnection::XcbConnection() : conn(nullptr), root(XCB_WINDOW_NONE), symbolsNa
                                    XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
     uint16_t required_events = ( XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
 
-    auto cookie = xcb_xkb_select_events_checked(conn, xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
-    if(GenericError(xcb_request_check(conn, cookie)))
+    auto cookie = xcb_xkb_select_events_checked(conn.get(), xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
+    if(GenericError(xcb_request_check(conn.get(), cookie)))
         throw std::runtime_error("xcb_xkb_select_events");
 
     const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
-    xcb_change_window_attributes(conn, root, XCB_CW_EVENT_MASK, values);
-    xcb_flush(conn);
-}
-
-XcbConnection::~XcbConnection()
-{
-    xcb_disconnect(conn);
+    xcb_change_window_attributes(conn.get(), root, XCB_CW_EVENT_MASK, values);
+    xcb_flush(conn.get());
 }
 
 QString XcbConnection::getAtomName(xcb_atom_t atom)
 {
-    auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn, atom);
+    auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn.get(), atom);
 
     if(auto reply = xcbReply.reply())
     {
@@ -634,7 +630,7 @@ const QStringList & XcbConnection::getListNames(void)
 
 xcb_atom_t XcbConnection::getAtom(const QString & name, bool create) const
 {
-    auto xcbReply = getReplyFunc2(xcb_intern_atom, conn, create ? 0 : 1, name.length(), name.toStdString().c_str());
+    auto xcbReply = getReplyFunc2(xcb_intern_atom, conn.get(), create ? 0 : 1, name.length(), name.toStdString().c_str());
 
     if(xcbReply.error())
         return XCB_ATOM_NONE;
@@ -649,7 +645,7 @@ xcb_window_t XcbConnection::getActiveWindow(void)
 
 void XcbConnection::initXkbLayouts(void)
 {
-    auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
+    auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
 
     if(xcbReply.error())
         throw std::runtime_error("xcb_xkb_get_names");
@@ -679,8 +675,8 @@ bool XcbConnection::switchXkbLayout(int layout)
         if(layout < 0)
             layout = (getXkbLayout() + 1) % listNames.size();
 
-        auto cookie = xcb_xkb_latch_lock_state_checked(conn, XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, layout, 0, 0, 0);
-        if(! GenericError(xcb_request_check(conn, cookie)))
+        auto cookie = xcb_xkb_latch_lock_state_checked(conn.get(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, layout, 0, 0, 0);
+        if(! GenericError(xcb_request_check(conn.get(), cookie)))
             return true;
     }
 
@@ -689,7 +685,7 @@ bool XcbConnection::switchXkbLayout(int layout)
 
 int XcbConnection::getXkbLayout(void)
 {
-    auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn, XCB_XKB_ID_USE_CORE_KBD);
+    auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
 
     if(xcbReply.error())
         throw std::runtime_error("xcb_xkb_get_state");
@@ -702,7 +698,7 @@ int XcbConnection::getXkbLayout(void)
 
 xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
 {
-    auto xcbReply = getReplyFunc2(xcb_get_property, conn, false, win, prop, XCB_ATOM_WINDOW, offset, 1);
+    auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
     if(xcbReply.error())
         return XCB_WINDOW_NONE;
@@ -718,7 +714,7 @@ xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop,
 
 QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t prop)
 {
-    auto xcbReply = getReplyFunc2(xcb_get_property, conn, false, win, prop, XCB_ATOM_STRING, 0, ~0);
+    auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_ATOM_STRING, 0, ~0);
     QStringList res;
 
     if(xcbReply.error())
@@ -739,6 +735,7 @@ QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t pr
 /* XcbEventsPool */
 XcbEventsPool::XcbEventsPool(QObject* obj) : QThread(obj), shutdown(false)
 {
+    connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ initXkbLayouts(); });
 }
 
 XcbEventsPool::~XcbEventsPool()
@@ -760,12 +757,12 @@ void XcbEventsPool::run(void)
         emit activeWindowNotify(activeWindow);
 
     // events
-    while(0 == xcb_connection_has_error(conn))
+    while(0 == xcb_connection_has_error(conn.get()))
     {
         if(shutdown)
             break;
 
-        while(auto ev = GenericEvent(xcb_poll_for_event(conn)))
+        while(auto ev = GenericEvent(xcb_poll_for_event(conn.get())))
         {
             auto type = ev ? ev->response_type & ~0x80 : 0;
             if(type == 0)
@@ -816,8 +813,10 @@ void XcbEventsPool::run(void)
                     xkbmap.reset();
 
                     // set new
-                    xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn, xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
-                    xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn, xkbdevid));
+                    xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn.get(), xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
+                    xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn.get(), xkbdevid));
+
+                    emit xkbStateResetNotify();
                 }
             }
         }
