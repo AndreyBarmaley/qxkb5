@@ -24,8 +24,6 @@
 #include <QMenu>
 #include <QImage>
 #include <QColor>
-#include <QSound>
-#include <QSoundEffect>
 #include <QPainter>
 #include <QProcess>
 #include <QByteArray>
@@ -52,15 +50,17 @@ MainSettings::MainSettings(QWidget *parent) :
     actionExit = new QAction("Exit", this);
 
     auto version = QString("%1 version: %2").arg(QCoreApplication::applicationName()).arg(QCoreApplication::applicationVersion());
+    auto github = QString("https://github.com/AndreyBarmaley/qxkb5");
+
     ui->setupUi(this);
     ui->tabWidget->setCurrentIndex(0);
-    ui->aboutInfo->appendPlainText(version);
-    ui->aboutInfo->appendPlainText("\n");
-    ui->aboutInfo->appendPlainText("Source code: https://github.com/AndreyBarmaley/qxkb5\n");
-    ui->aboutInfo->appendPlainText("Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>\n");
+    ui->aboutInfo->setText(QString("<center><b>%1</b></center><br><br>"
+                                   "<p>Source code: <a href='%2'>%2</a></p>"
+                                   "<p>Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
 
     xcb = new XcbEventsPool(this);
     xcb->initXkbLayouts();
+
 
     cacheLoadItems();
     configLoad();
@@ -340,8 +340,7 @@ void setHighlightStatusItem(QTreeWidgetItem* item, int state2)
         item->setToolTip(col, col == 2 ? "change layout" : "change state: normal, first, fixed");
 
         auto font = item->font(col);
-        font.setItalic(state2 == LayoutState::StateFirst);
-        font.setBold(state2 == LayoutState::StateFixed);
+        font.setBold(state2 == LayoutState::StateFixed || state2 == LayoutState::StateFirst);
         item->setFont(col, font);
     }
 }
@@ -473,10 +472,10 @@ void MainSettings::xkbStateChanged(int layout1)
                 item->setData(2, Qt::UserRole, layout1);
                 play = true;
             }
-            else
-            if(state2 == LayoutState::StateFirst)
-                play = true;
         }
+
+        if(state2 == LayoutState::StateFirst)
+            play = true;
 
         if(play && ui->checkBoxSound->isChecked())
         {
@@ -540,7 +539,7 @@ void MainSettings::initXkbLayoutIcons(bool initXkbLayer)
     if(initXkbLayer)
         xcb->initXkbLayouts();
 
-    ui->systemInfo->setText(xcb->getSymbolsLabel());
+    ui->systemInfo->setText(QString("xkb info: %1").arg(xcb->getSymbolsLabel()));
     layoutIcons.clear();
 
     for(auto & name : xcb->getListNames())

@@ -17,17 +17,17 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>3</number>
      </property>
      <widget class="QWidget" name="tabAbout">
       <attribute name="title">
        <string>About</string>
       </attribute>
-      <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <layout class="QVBoxLayout" name="verticalLayout_6">
        <item>
-        <widget class="QLabel" name="aboutIcon">
+        <widget class="QLabel" name="aboutInfo">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="text">
           <string/>
@@ -35,14 +35,37 @@
         </widget>
        </item>
        <item>
-        <widget class="QPlainTextEdit" name="aboutInfo">
-         <property name="enabled">
-          <bool>true</bool>
+        <spacer name="horizontalSpacer_5">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
          </property>
-         <property name="readOnly">
-          <bool>true</bool>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="systemInfo">
+         <property name="text">
+          <string>TextLabel</string>
          </property>
         </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
        </item>
       </layout>
      </widget>
@@ -52,16 +75,12 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <widget class="QLabel" name="labelSystem">
+        <widget class="QCheckBox" name="checkBoxSound">
          <property name="text">
-          <string>system info:</string>
+          <string> sound switch</string>
          </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="systemInfo">
-         <property name="text">
-          <string>info</string>
+         <property name="checked">
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -69,16 +88,6 @@
         <widget class="Line" name="line_3">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="checkBoxSound">
-         <property name="text">
-          <string> sound switch</string>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -385,7 +394,7 @@
      </widget>
      <widget class="QWidget" name="tabCache">
       <attribute name="title">
-       <string>Cache</string>
+       <string>Windows</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>

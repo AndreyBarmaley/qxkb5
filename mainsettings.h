@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220211
+#define VERSION 20220212
 
 #include <QIcon>
 #include <QList>
