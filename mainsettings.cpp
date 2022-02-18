@@ -389,6 +389,7 @@ QTreeWidgetItem* MainSettings::cacheFindItem(const QString & class1, const QStri
 
     for(auto & item : items1)
         if(items2.contains(item)) return item;
+
     return nullptr;
 }
 
@@ -422,6 +423,8 @@ void MainSettings::cacheItemClicked(QTreeWidgetItem* item, int column)
 void MainSettings::activeWindowChanged(int win)
 {
     auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+    if(list.empty()) return;
+
     auto layout1 = xcb->getXkbLayout();
     auto & names = xcb->getListNames();
 
@@ -448,8 +451,10 @@ void MainSettings::xkbStateChanged(int layout1)
     if(win == XCB_WINDOW_NONE)
         return;
 
-    auto & names = xcb->getListNames();
     auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+    if(list.empty()) return;
+
+    auto & names = xcb->getListNames();
 
     auto item = cacheFindItem(list.front(), list.back());
     if(item)
