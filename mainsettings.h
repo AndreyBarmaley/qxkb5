@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220212
+#define VERSION 20220220
 
 #include <QIcon>
 #include <QList>
@@ -109,17 +109,17 @@ public:
     virtual ~XcbConnection(){}
 
     void initXkbLayouts(void);
-    int getXkbLayout(void);
+    int getXkbLayout(void) const;
     bool switchXkbLayout(int layout = -1);
 
     xcb_atom_t getAtom(const QString & name, bool create = true) const;
-    xcb_window_t getActiveWindow(void);
-    xcb_window_t getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
+    xcb_window_t getActiveWindow(void) const;
+    xcb_window_t getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0) const;
 
-    QString getAtomName(xcb_atom_t);
-    QString getSymbolsLabel(void);
-    QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop);
-    const QStringList & getListNames(void);
+    QString getAtomName(xcb_atom_t) const;
+    QString getSymbolsLabel(void) const;
+    QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
+    const QStringList & getListNames(void) const;
 
     template<typename Reply, typename Cookie>
     ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const

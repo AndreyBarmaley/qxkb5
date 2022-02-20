@@ -56,7 +56,7 @@ MainSettings::MainSettings(QWidget *parent) :
     ui->tabWidget->setCurrentIndex(0);
     ui->aboutInfo->setText(QString("<center><b>%1</b></center><br><br>"
                                    "<p>Source code: <a href='%2'>%2</a></p>"
-                                   "<p>Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
+                                   "<p>Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
 
     configLoad();
 
@@ -210,7 +210,8 @@ void MainSettings::selectIconsPath(void)
 {
     QFileDialog dialog(this);
     dialog.setDirectory(QDir(ui->lineEditIconsPath->text()));
-    dialog.setFileMode(QFileDialog::DirectoryOnly);
+    //dialog.setFileMode(QFileDialog::DirectoryOnly);
+    dialog.setOption(QFileDialog::ShowDirsOnly, true);
     if(dialog.exec())
     {
         ui->lineEditIconsPath->setText(dialog.directory().absolutePath());
@@ -609,7 +610,7 @@ XcbConnection::XcbConnection() :
     xcb_flush(conn.get());
 }
 
-QString XcbConnection::getAtomName(xcb_atom_t atom)
+QString XcbConnection::getAtomName(xcb_atom_t atom) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn.get(), atom);
 
@@ -623,12 +624,12 @@ QString XcbConnection::getAtomName(xcb_atom_t atom)
     return QString("NONE");
 }
 
-QString XcbConnection::getSymbolsLabel(void)
+QString XcbConnection::getSymbolsLabel(void) const
 {
     return getAtomName(symbolsNameAtom);
 }
 
-const QStringList & XcbConnection::getListNames(void)
+const QStringList & XcbConnection::getListNames(void) const
 {
     return listNames;
 }
@@ -643,7 +644,7 @@ xcb_atom_t XcbConnection::getAtom(const QString & name, bool create) const
     return xcbReply.reply() ? xcbReply.reply()->atom : XCB_ATOM_NONE;
 }
 
-xcb_window_t XcbConnection::getActiveWindow(void)
+xcb_window_t XcbConnection::getActiveWindow(void) const
 {
     return getPropertyWindow(root, activeWindowAtom);
 }
@@ -688,7 +689,7 @@ bool XcbConnection::switchXkbLayout(int layout)
     return false;
 }
 
-int XcbConnection::getXkbLayout(void)
+int XcbConnection::getXkbLayout(void) const
 {
     auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
 
@@ -701,7 +702,7 @@ int XcbConnection::getXkbLayout(void)
     return 0;
 }
 
-xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
@@ -717,7 +718,7 @@ xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop,
     return XCB_WINDOW_NONE;
 }
 
-QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t prop)
+QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_ATOM_STRING, 0, ~0);
     QStringList res;
