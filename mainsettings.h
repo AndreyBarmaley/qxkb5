@@ -43,7 +43,9 @@
 #include <memory>
 
 #include "xcb/xcb.h"
+#define explicit dont_use_cxx_explicit
 #include "xcb/xkb.h"
+#undef explicit
 #include "xkbcommon/xkbcommon-x11.h"
 
 namespace Ui {
