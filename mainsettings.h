@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220220
+#define VERSION 20220308
 
 #include <QIcon>
 #include <QList>
@@ -145,6 +145,7 @@ protected:
 
 signals:
     void activeWindowNotify(int);
+    void shutdownNotify(void);
     void xkbStateNotify(int);
     void xkbStateResetNotify(void);
 };
@@ -162,6 +163,7 @@ class MainSettings : public QWidget
     QAction* actionExit;
     QList<QIcon> layoutIcons;
     QSound soundClick;
+    QString startupCmd;
 
 public:
     explicit MainSettings(QWidget *parent = 0);
@@ -178,6 +180,7 @@ protected:
     void configSave(void);
     void configLoad(void);
     void initXkbLayoutIcons(bool f = false);
+    void startupProcess(void);
 
 private slots:
     void iconActivated(QSystemTrayIcon::ActivationReason reason);

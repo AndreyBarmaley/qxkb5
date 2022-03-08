@@ -59,13 +59,7 @@ MainSettings::MainSettings(QWidget *parent) :
                                    "<p>Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
 
     configLoad();
-
-    if(ui->checkBoxStartup)
-    {
-        QProcess process;
-        process.start(ui->lineEditStartup->text());
-        process.waitForFinished();
-    }
+    startupProcess();
 
     xcb = new XcbEventsPool(this);
     xcb->initXkbLayouts();
@@ -91,6 +85,7 @@ MainSettings::MainSettings(QWidget *parent) :
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(iconActivated(QSystemTrayIcon::ActivationReason)));
     connect(xcb, SIGNAL(activeWindowNotify(int)), this, SLOT(activeWindowChanged(int)));
     connect(xcb, SIGNAL(xkbStateNotify(int)), this, SLOT(xkbStateChanged(int)));
+    connect(xcb, SIGNAL(shutdownNotify()), this, SLOT(exitProgram()));
     connect(this, SIGNAL(iconAttributeNotify()), this, SLOT(iconAttributeChanged()));
 
     // start events pool thread mode
@@ -102,10 +97,19 @@ MainSettings::~MainSettings()
     delete ui;
 }
 
+void MainSettings::startupProcess(void)
+{
+    if(ui->checkBoxStartup && !ui->lineEditStartup->text().isEmpty())
+    {
+        QProcess process(this);
+        process.start(ui->lineEditStartup->text());
+        if(process.waitForFinished())
+            startupCmd = ui->lineEditStartup->text();
+    }
+}
+
 void MainSettings::exitProgram(void)
 {
-    cacheSaveItems();
-    configSave();
     hide();
     close();
 }
@@ -124,9 +128,15 @@ void MainSettings::closeEvent(QCloseEvent* event)
 {
     if(isVisible())
     {
+        if(ui->lineEditStartup->text() != startupCmd)
+            startupProcess();
+
         event->ignore();
         hide();
     }
+
+    cacheSaveItems();
+    configSave();
 }
 
 void MainSettings::setBackgroundTransparent(bool f)
@@ -210,8 +220,8 @@ void MainSettings::selectIconsPath(void)
 {
     QFileDialog dialog(this);
     dialog.setDirectory(QDir(ui->lineEditIconsPath->text()));
-    //dialog.setFileMode(QFileDialog::DirectoryOnly);
     dialog.setOption(QFileDialog::ShowDirsOnly, true);
+
     if(dialog.exec())
     {
         ui->lineEditIconsPath->setText(dialog.directory().absolutePath());
@@ -336,7 +346,7 @@ QString layoutStateName(int v)
 
 void setHighlightStatusItem(QTreeWidgetItem* item, int state2)
 {
-    for(int col = 0; col < 4; ++col)
+    for(int col = 0; col < item->columnCount(); ++col)
     {
         item->setToolTip(col, col == 2 ? "change layout" : "change state: normal, first, fixed");
 
@@ -597,9 +607,10 @@ XcbConnection::XcbConnection() :
     if(!xkbstate)
         throw std::runtime_error("xkb_x11_state_new_from_device");
 
-    uint16_t required_map_parts = (XCB_XKB_MAP_PART_KEY_TYPES | XCB_XKB_MAP_PART_KEY_SYMS | XCB_XKB_MAP_PART_MODIFIER_MAP |
-                                   XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
-    uint16_t required_events = ( XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
+    // XCB_XKB_MAP_PART_KEY_TYPES, XCB_XKB_MAP_PART_KEY_SYMS, XCB_XKB_MAP_PART_MODIFIER_MAP, XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS
+    // XCB_XKB_MAP_PART_KEY_ACTIONS, XCB_XKB_MAP_PART_VIRTUAL_MODS, XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP
+    uint16_t required_map_parts = 0;
+    uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
 
     auto cookie = xcb_xkb_select_events_checked(conn.get(), xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
     if(GenericError(xcb_request_check(conn.get(), cookie)))
@@ -607,6 +618,7 @@ XcbConnection::XcbConnection() :
 
     const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
     xcb_change_window_attributes(conn.get(), root, XCB_CW_EVENT_MASK, values);
+
     xcb_flush(conn.get());
 }
 
@@ -747,12 +759,11 @@ XcbEventsPool::XcbEventsPool(QObject* obj) : QThread(obj), shutdown(false)
 XcbEventsPool::~XcbEventsPool()
 {
     shutdown = true;
-    for(int ii = 1; ii < 10; ++ii)
+    if(! wait(1000))
     {
-        msleep(100);
-        if(isFinished()) break;
+        terminate();
+        wait();
     }
-    if(isRunning()) exit();
 }
 
 void XcbEventsPool::run(void)
@@ -763,10 +774,17 @@ void XcbEventsPool::run(void)
         emit activeWindowNotify(activeWindow);
 
     // events
-    while(0 == xcb_connection_has_error(conn.get()))
+    while(true)
     {
         if(shutdown)
             break;
+
+        if(int err = xcb_connection_has_error(conn.get()))
+        {
+            qWarning() << "xcb error code:" << err;
+            emit shutdownNotify();
+            break;
+        }
 
         while(auto ev = GenericEvent(xcb_poll_for_event(conn.get())))
         {
@@ -827,6 +845,6 @@ void XcbEventsPool::run(void)
             }
         }
 
-        msleep(1);
+        msleep(25);
     }
 }
