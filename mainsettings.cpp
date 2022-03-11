@@ -99,7 +99,7 @@ MainSettings::~MainSettings()
 
 void MainSettings::startupProcess(void)
 {
-    if(ui->checkBoxStartup && !ui->lineEditStartup->text().isEmpty())
+    if(ui->checkBoxStartup->isChecked() && !ui->lineEditStartup->text().isEmpty())
     {
         QProcess process(this);
         process.start(ui->lineEditStartup->text());
