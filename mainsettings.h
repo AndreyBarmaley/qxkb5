@@ -148,6 +148,7 @@ signals:
     void shutdownNotify(void);
     void xkbStateNotify(int);
     void xkbStateResetNotify(void);
+    void xkbNamesChanged(void);
 };
 
 enum LayoutState { StateNormal, StateFirst, StateFixed };

@@ -86,6 +86,7 @@ MainSettings::MainSettings(QWidget *parent) :
     connect(xcb, SIGNAL(activeWindowNotify(int)), this, SLOT(activeWindowChanged(int)));
     connect(xcb, SIGNAL(xkbStateNotify(int)), this, SLOT(xkbStateChanged(int)));
     connect(xcb, SIGNAL(shutdownNotify()), this, SLOT(exitProgram()));
+    connect(xcb, SIGNAL(xkbNamesChanged()), this, SLOT(iconAttributeChanged()));
     connect(this, SIGNAL(iconAttributeNotify()), this, SLOT(iconAttributeChanged()));
 
     // start events pool thread mode
@@ -753,7 +754,7 @@ QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t pr
 /* XcbEventsPool */
 XcbEventsPool::XcbEventsPool(QObject* obj) : QThread(obj), shutdown(false)
 {
-    connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ initXkbLayouts(); });
+    connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ initXkbLayouts(); emit xkbNamesChanged(); });
 }
 
 XcbEventsPool::~XcbEventsPool()
