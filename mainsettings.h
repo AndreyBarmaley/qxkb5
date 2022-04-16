@@ -41,6 +41,7 @@
 
 #include <atomic>
 #include <memory>
+#include <functional>
 
 #include "xcb/xcb.h"
 #define explicit dont_use_cxx_explicit
