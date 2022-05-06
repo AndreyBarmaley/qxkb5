@@ -470,11 +470,6 @@ void MainSettings::xkbStateChanged(int layout1)
 
     auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
     if(list.empty()) return;
-<<<<<<< HEAD
-=======
-
-    auto & names = xcb->getListNames();
->>>>>>> 7258752e3277b9ad9e64fb19ada9643d90deaef0
 
     auto names = xcb->getXkbNames();
     auto item = cacheFindItem(list.front(), list.back());
@@ -616,11 +611,6 @@ XcbConnection::XcbConnection() :
     if(!xkbstate)
         throw std::runtime_error("xkb_x11_state_new_from_device");
 
-<<<<<<< HEAD
-=======
-    // XCB_XKB_MAP_PART_KEY_TYPES, XCB_XKB_MAP_PART_KEY_SYMS, XCB_XKB_MAP_PART_MODIFIER_MAP, XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS
-    // XCB_XKB_MAP_PART_KEY_ACTIONS, XCB_XKB_MAP_PART_VIRTUAL_MODS, XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP
->>>>>>> 7258752e3277b9ad9e64fb19ada9643d90deaef0
     uint16_t required_map_parts = 0;
     uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
 
@@ -648,19 +638,6 @@ QString XcbConnection::getAtomName(xcb_atom_t atom) const
     return QString("NONE");
 }
 
-<<<<<<< HEAD
-=======
-QString XcbConnection::getSymbolsLabel(void) const
-{
-    return getAtomName(symbolsNameAtom);
-}
-
-const QStringList & XcbConnection::getListNames(void) const
-{
-    return listNames;
-}
-
->>>>>>> 7258752e3277b9ad9e64fb19ada9643d90deaef0
 xcb_atom_t XcbConnection::getAtom(const QString & name, bool create) const
 {
     auto xcbReply = getReplyFunc2(xcb_intern_atom, conn.get(), create ? 0 : 1, name.length(), name.toStdString().c_str());
@@ -788,11 +765,7 @@ QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t pr
 /* XcbEventsPool */
 XcbEventsPool::XcbEventsPool(QObject* obj) : QThread(obj), shutdown(false)
 {
-<<<<<<< HEAD
     connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ emit xkbNamesChanged(); });
-=======
-    connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ initXkbLayouts(); emit xkbNamesChanged(); });
->>>>>>> 7258752e3277b9ad9e64fb19ada9643d90deaef0
 }
 
 XcbEventsPool::~XcbEventsPool()
