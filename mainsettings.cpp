@@ -56,19 +56,12 @@ MainSettings::MainSettings(QWidget *parent) :
     ui->tabWidget->setCurrentIndex(0);
     ui->aboutInfo->setText(QString("<center><b>%1</b></center><br><br>"
                                    "<p>Source code: <a href='%2'>%2</a></p>"
-                                   "<p>Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
+                                   "<p>Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
 
     configLoad();
-
-    if(ui->checkBoxStartup)
-    {
-        QProcess process;
-        process.start(ui->lineEditStartup->text());
-        process.waitForFinished();
-    }
+    startupProcess();
 
     xcb = new XcbEventsPool(this);
-    xcb->initXkbLayouts();
 
     cacheLoadItems();
 
@@ -91,6 +84,8 @@ MainSettings::MainSettings(QWidget *parent) :
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(iconActivated(QSystemTrayIcon::ActivationReason)));
     connect(xcb, SIGNAL(activeWindowNotify(int)), this, SLOT(activeWindowChanged(int)));
     connect(xcb, SIGNAL(xkbStateNotify(int)), this, SLOT(xkbStateChanged(int)));
+    connect(xcb, SIGNAL(shutdownNotify()), this, SLOT(exitProgram()));
+    connect(xcb, SIGNAL(xkbNamesChanged()), this, SLOT(iconAttributeChanged()));
     connect(this, SIGNAL(iconAttributeNotify()), this, SLOT(iconAttributeChanged()));
 
     // start events pool thread mode
@@ -102,10 +97,19 @@ MainSettings::~MainSettings()
     delete ui;
 }
 
+void MainSettings::startupProcess(void)
+{
+    if(ui->checkBoxStartup->isChecked() && !ui->lineEditStartup->text().isEmpty())
+    {
+        QProcess process(this);
+        process.start(ui->lineEditStartup->text());
+        if(process.waitForFinished())
+            startupCmd = ui->lineEditStartup->text();
+    }
+}
+
 void MainSettings::exitProgram(void)
 {
-    cacheSaveItems();
-    configSave();
     hide();
     close();
 }
@@ -124,9 +128,15 @@ void MainSettings::closeEvent(QCloseEvent* event)
 {
     if(isVisible())
     {
+        if(ui->lineEditStartup->text() != startupCmd)
+            startupProcess();
+
         event->ignore();
         hide();
     }
+
+    cacheSaveItems();
+    configSave();
 }
 
 void MainSettings::setBackgroundTransparent(bool f)
@@ -210,7 +220,8 @@ void MainSettings::selectIconsPath(void)
 {
     QFileDialog dialog(this);
     dialog.setDirectory(QDir(ui->lineEditIconsPath->text()));
-    dialog.setFileMode(QFileDialog::DirectoryOnly);
+    dialog.setOption(QFileDialog::ShowDirsOnly, true);
+
     if(dialog.exec())
     {
         ui->lineEditIconsPath->setText(dialog.directory().absolutePath());
@@ -335,7 +346,7 @@ QString layoutStateName(int v)
 
 void setHighlightStatusItem(QTreeWidgetItem* item, int state2)
 {
-    for(int col = 0; col < 4; ++col)
+    for(int col = 0; col < item->columnCount(); ++col)
     {
         item->setToolTip(col, col == 2 ? "change layout" : "change state: normal, first, fixed");
 
@@ -368,17 +379,19 @@ void MainSettings::cacheLoadItems(void)
 
         ds >> class1 >> class2 >> layout2 >> state2;
 
-        auto & names = xcb->getListNames();
+        auto names = xcb->getXkbNames();
+        if(names.size())
+        {
+            QString layout1 = names.size() > layout2 ? names.at(layout2) : names.front();
+            QString state1 = layoutStateName(state2);
 
-        QString layout1 = names.size() > layout2 ? names.at(layout2) : names.front();
-        QString state1 = layoutStateName(state2);
+            auto item = new QTreeWidgetItem(QStringList() << class1 << class2 << layout1 << state1);
+            item->setData(2, Qt::UserRole, layout2);
+            item->setData(3, Qt::UserRole, state2);
 
-        auto item = new QTreeWidgetItem(QStringList() << class1 << class2 << layout1 << state1);
-        item->setData(2, Qt::UserRole, layout2);
-        item->setData(3, Qt::UserRole, state2);
-
-        setHighlightStatusItem(item, state2);
-        ui->treeWidgetCache->addTopLevelItem(item);
+            setHighlightStatusItem(item, state2);
+            ui->treeWidgetCache->addTopLevelItem(item);
+        }
     }
 }
 
@@ -389,6 +402,7 @@ QTreeWidgetItem* MainSettings::cacheFindItem(const QString & class1, const QStri
 
     for(auto & item : items1)
         if(items2.contains(item)) return item;
+
     return nullptr;
 }
 
@@ -397,11 +411,14 @@ void MainSettings::cacheItemClicked(QTreeWidgetItem* item, int column)
     // change layout priority
     if(column == 2)
     {
-        auto & names = xcb->getListNames();
-        int layout2 = (item->data(2, Qt::UserRole).toInt() + 1) % names.size();
+        auto names = xcb->getXkbNames();
+        if(names.size())
+        {
+            int layout2 = (item->data(2, Qt::UserRole).toInt() + 1) % names.size();
 
-        item->setText(2, names.at(layout2));
-        item->setData(2, Qt::UserRole, layout2);
+            item->setText(2, names.at(layout2));
+            item->setData(2, Qt::UserRole, layout2);
+        }
     }
     // change state
     else
@@ -422,8 +439,10 @@ void MainSettings::cacheItemClicked(QTreeWidgetItem* item, int column)
 void MainSettings::activeWindowChanged(int win)
 {
     auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+    if(list.empty()) return;
+
     auto layout1 = xcb->getXkbLayout();
-    auto & names = xcb->getListNames();
+    auto names = xcb->getXkbNames();
 
     auto item = cacheFindItem(list.front(), list.back());
     if(item)
@@ -434,6 +453,7 @@ void MainSettings::activeWindowChanged(int win)
             xcb->switchXkbLayout(layout2);
     }
     else
+    if(names.size())
     {
         auto item = new QTreeWidgetItem(QStringList() << list.front() << list.back() << names.at(layout1) << "normal");
         item->setData(2, Qt::UserRole, layout1);
@@ -448,10 +468,12 @@ void MainSettings::xkbStateChanged(int layout1)
     if(win == XCB_WINDOW_NONE)
         return;
 
-    auto & names = xcb->getListNames();
     auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+    if(list.empty()) return;
 
+    auto names = xcb->getXkbNames();
     auto item = cacheFindItem(list.front(), list.back());
+
     if(item)
     {
         auto state2 = item->data(3, Qt::UserRole).toInt();
@@ -484,6 +506,7 @@ void MainSettings::xkbStateChanged(int layout1)
         }
     }
     else
+    if(names.size())
     {
         auto item = new QTreeWidgetItem(QStringList() << list.front() << list.back() << names.at(layout1) << "normal");
         item->setData(2, Qt::UserRole, layout1);
@@ -536,21 +559,18 @@ QPixmap MainSettings::getLayoutIcon(const QString & layoutName)
 
 void MainSettings::initXkbLayoutIcons(bool initXkbLayer)
 {
-    if(initXkbLayer)
-        xcb->initXkbLayouts();
-
     ui->systemInfo->setText(QString("xkb info: %1").arg(xcb->getSymbolsLabel()));
     layoutIcons.clear();
 
-    for(auto & name : xcb->getListNames())
+    for(auto & name : xcb->getXkbNames())
         layoutIcons << getLayoutIcon(name);
 }
 
 /* XcbConnection */
 XcbConnection::XcbConnection() :
-    conn{ xcb_connect(":0", nullptr), xcb_disconnect },
+    conn{ xcb_connect(nullptr, nullptr), xcb_disconnect },
     xkbctx{ nullptr, xkb_context_unref }, xkbmap{ nullptr, xkb_keymap_unref }, xkbstate{ nullptr, xkb_state_unref },
-    xkbext(nullptr), root(XCB_WINDOW_NONE), symbolsNameAtom(XCB_ATOM_NONE), activeWindowAtom(XCB_ATOM_NONE), xkbdevid(-1)
+    xkbext(nullptr), root(XCB_WINDOW_NONE), activeWindowAtom(XCB_ATOM_NONE), xkbdevid(-1)
 {
     if(xcb_connection_has_error(conn.get()))
         throw std::runtime_error("xcb_connect");
@@ -591,9 +611,8 @@ XcbConnection::XcbConnection() :
     if(!xkbstate)
         throw std::runtime_error("xkb_x11_state_new_from_device");
 
-    uint16_t required_map_parts = (XCB_XKB_MAP_PART_KEY_TYPES | XCB_XKB_MAP_PART_KEY_SYMS | XCB_XKB_MAP_PART_MODIFIER_MAP |
-                                   XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
-    uint16_t required_events = ( XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
+    uint16_t required_map_parts = 0;
+    uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
 
     auto cookie = xcb_xkb_select_events_checked(conn.get(), xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
     if(GenericError(xcb_request_check(conn.get(), cookie)))
@@ -601,10 +620,11 @@ XcbConnection::XcbConnection() :
 
     const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
     xcb_change_window_attributes(conn.get(), root, XCB_CW_EVENT_MASK, values);
+
     xcb_flush(conn.get());
 }
 
-QString XcbConnection::getAtomName(xcb_atom_t atom)
+QString XcbConnection::getAtomName(xcb_atom_t atom) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn.get(), atom);
 
@@ -618,16 +638,6 @@ QString XcbConnection::getAtomName(xcb_atom_t atom)
     return QString("NONE");
 }
 
-QString XcbConnection::getSymbolsLabel(void)
-{
-    return getAtomName(symbolsNameAtom);
-}
-
-const QStringList & XcbConnection::getListNames(void)
-{
-    return listNames;
-}
-
 xcb_atom_t XcbConnection::getAtom(const QString & name, bool create) const
 {
     auto xcbReply = getReplyFunc2(xcb_intern_atom, conn.get(), create ? 0 : 1, name.length(), name.toStdString().c_str());
@@ -638,12 +648,12 @@ xcb_atom_t XcbConnection::getAtom(const QString & name, bool create) const
     return xcbReply.reply() ? xcbReply.reply()->atom : XCB_ATOM_NONE;
 }
 
-xcb_window_t XcbConnection::getActiveWindow(void)
+xcb_window_t XcbConnection::getActiveWindow(void) const
 {
     return getPropertyWindow(root, activeWindowAtom);
 }
 
-void XcbConnection::initXkbLayouts(void)
+QString XcbConnection::getSymbolsLabel(void) const
 {
     auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
 
@@ -657,33 +667,53 @@ void XcbConnection::initXkbLayouts(void)
 
         xcb_xkb_get_names_value_list_unpack(buffer, reply->nTypes, reply->indicators, reply->virtualMods,
                                             reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
+        return getAtomName(list.symbolsName);
+    }
+
+    return nullptr;
+}
+
+QStringList XcbConnection::getXkbNames(void) const
+{
+    auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
+
+    if(xcbReply.error())
+        throw std::runtime_error("xcb_xkb_get_names");
+
+    QStringList res;
+    if(auto reply = xcbReply.reply())
+    {
+        const void *buffer = xcb_xkb_get_names_value_list(reply.get());
+        xcb_xkb_get_names_value_list_t list;
+
+        xcb_xkb_get_names_value_list_unpack(buffer, reply->nTypes, reply->indicators, reply->virtualMods,
+                                            reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
         int groups = xcb_xkb_get_names_value_list_groups_length(reply.get(), & list);
 
-        symbolsNameAtom = list.symbolsName;
-        listNames.clear();
-
         for(int ii = 0; ii < groups; ++ii)
-            listNames << getAtomName(list.groups[ii]);
+            res << getAtomName(list.groups[ii]);
     }
+
+    return res;
 }
 
 bool XcbConnection::switchXkbLayout(int layout)
 {
-    if(listNames.size())
+    // next
+    if(layout < 0)
     {
-        // next
-        if(layout < 0)
-            layout = (getXkbLayout() + 1) % listNames.size();
-
-        auto cookie = xcb_xkb_latch_lock_state_checked(conn.get(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, layout, 0, 0, 0);
-        if(! GenericError(xcb_request_check(conn.get(), cookie)))
-            return true;
+        auto names = getXkbNames();
+        layout = (getXkbLayout() + 1) % names.size();
     }
+
+    auto cookie = xcb_xkb_latch_lock_state_checked(conn.get(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, layout, 0, 0, 0);
+    if(! GenericError(xcb_request_check(conn.get(), cookie)))
+        return true;
 
     return false;
 }
 
-int XcbConnection::getXkbLayout(void)
+int XcbConnection::getXkbLayout(void) const
 {
     auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
 
@@ -696,7 +726,7 @@ int XcbConnection::getXkbLayout(void)
     return 0;
 }
 
-xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
@@ -712,7 +742,7 @@ xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop,
     return XCB_WINDOW_NONE;
 }
 
-QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t prop)
+QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_ATOM_STRING, 0, ~0);
     QStringList res;
@@ -735,18 +765,17 @@ QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t pr
 /* XcbEventsPool */
 XcbEventsPool::XcbEventsPool(QObject* obj) : QThread(obj), shutdown(false)
 {
-    connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ initXkbLayouts(); });
+    connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ emit xkbNamesChanged(); });
 }
 
 XcbEventsPool::~XcbEventsPool()
 {
     shutdown = true;
-    for(int ii = 1; ii < 10; ++ii)
+    if(! wait(1000))
     {
-        msleep(100);
-        if(isFinished()) break;
+        terminate();
+        wait();
     }
-    if(isRunning()) exit();
 }
 
 void XcbEventsPool::run(void)
@@ -757,10 +786,17 @@ void XcbEventsPool::run(void)
         emit activeWindowNotify(activeWindow);
 
     // events
-    while(0 == xcb_connection_has_error(conn.get()))
+    while(true)
     {
         if(shutdown)
             break;
+
+        if(int err = xcb_connection_has_error(conn.get()))
+        {
+            qWarning() << "xcb error code:" << err;
+            emit shutdownNotify();
+            break;
+        }
 
         while(auto ev = GenericEvent(xcb_poll_for_event(conn.get())))
         {
@@ -821,6 +857,6 @@ void XcbEventsPool::run(void)
             }
         }
 
-        msleep(1);
+        msleep(25);
     }
 }

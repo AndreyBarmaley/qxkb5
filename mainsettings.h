@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220212
+#define VERSION 20220506
 
 #include <QIcon>
 #include <QList>
@@ -41,9 +41,12 @@
 
 #include <atomic>
 #include <memory>
+#include <functional>
 
 #include "xcb/xcb.h"
+#define explicit dont_use_cxx_explicit
 #include "xcb/xkb.h"
+#undef explicit
 #include "xkbcommon/xkbcommon-x11.h"
 
 namespace Ui {
@@ -97,27 +100,24 @@ protected:
     std::unique_ptr<xkb_state, decltype(xkb_state_unref)*> xkbstate;
     const xcb_query_extension_reply_t* xkbext;
     xcb_window_t root;
-    xcb_atom_t symbolsNameAtom;
     xcb_atom_t activeWindowAtom;
-    QStringList listNames;
     int32_t xkbdevid;
 
 public:
     XcbConnection();
     virtual ~XcbConnection(){}
 
-    void initXkbLayouts(void);
-    int getXkbLayout(void);
+    int getXkbLayout(void) const;
     bool switchXkbLayout(int layout = -1);
+    QStringList getXkbNames(void) const;
 
     xcb_atom_t getAtom(const QString & name, bool create = true) const;
-    xcb_window_t getActiveWindow(void);
-    xcb_window_t getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
+    xcb_window_t getActiveWindow(void) const;
+    xcb_window_t getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0) const;
 
-    QString getAtomName(xcb_atom_t);
-    QString getSymbolsLabel(void);
-    QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop);
-    const QStringList & getListNames(void);
+    QString getAtomName(xcb_atom_t) const;
+    QString getSymbolsLabel(void) const;
+    QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
 
     template<typename Reply, typename Cookie>
     ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
@@ -143,8 +143,10 @@ protected:
 
 signals:
     void activeWindowNotify(int);
+    void shutdownNotify(void);
     void xkbStateNotify(int);
     void xkbStateResetNotify(void);
+    void xkbNamesChanged(void);
 };
 
 enum LayoutState { StateNormal, StateFirst, StateFixed };
@@ -160,6 +162,7 @@ class MainSettings : public QWidget
     QAction* actionExit;
     QList<QIcon> layoutIcons;
     QSound soundClick;
+    QString startupCmd;
 
 public:
     explicit MainSettings(QWidget *parent = 0);
@@ -176,6 +179,7 @@ protected:
     void configSave(void);
     void configLoad(void);
     void initXkbLayoutIcons(bool f = false);
+    void startupProcess(void);
 
 private slots:
     void iconActivated(QSystemTrayIcon::ActivationReason reason);
