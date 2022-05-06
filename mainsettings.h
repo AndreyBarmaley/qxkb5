@@ -23,7 +23,11 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
+<<<<<<< HEAD
 #define VERSION 20220506
+=======
+#define VERSION 20220310
+>>>>>>> 7258752e3277b9ad9e64fb19ada9643d90deaef0
 
 #include <QIcon>
 #include <QList>
@@ -107,6 +111,10 @@ public:
     XcbConnection();
     virtual ~XcbConnection(){}
 
+<<<<<<< HEAD
+=======
+    void initXkbLayouts(void);
+>>>>>>> 7258752e3277b9ad9e64fb19ada9643d90deaef0
     int getXkbLayout(void) const;
     bool switchXkbLayout(int layout = -1);
     QStringList getXkbNames(void) const;
@@ -118,6 +126,10 @@ public:
     QString getAtomName(xcb_atom_t) const;
     QString getSymbolsLabel(void) const;
     QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
+<<<<<<< HEAD
+=======
+    const QStringList & getListNames(void) const;
+>>>>>>> 7258752e3277b9ad9e64fb19ada9643d90deaef0
 
     template<typename Reply, typename Cookie>
     ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
