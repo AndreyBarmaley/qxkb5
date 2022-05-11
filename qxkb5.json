@@ -1,0 +1,9 @@
+{
+    "sound": true,
+    "startup:cmd": "",
+    "picture:mode": true,
+    "background:color": "#191970",
+    "background:transparent": false,
+    "text:color": "#ffffff",
+    "label:font": "Cantarell, 18, 50"
+}

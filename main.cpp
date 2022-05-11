@@ -23,16 +23,29 @@
 #include "mainsettings.h"
 
 #include <QDir>
+#include <QFile>
 #include <QDebug>
 #include <QLockFile>
 #include <QApplication>
 #include <QStandardPaths>
+#include <QCommandLineParser>
 #include <exception>
 
 int main(int argc, char *argv[])
 {
+    QApplication app(argc, argv);
     QCoreApplication::setApplicationName("QXkb5");
     QCoreApplication::setApplicationVersion(QString::number(VERSION));
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription("Xkb switcher based xcb and Qt5");
+    parser.addHelpOption();
+    parser.addVersionOption();
+    QCommandLineOption configOption(QStringList() << "c" << "config", "Global file config (json format).", "config");
+    parser.addOption(configOption);
+
+    parser.process(app);
+    QString configFile = parser.value(configOption);
 
     auto localData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(localData);
@@ -45,12 +58,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    QApplication a(argc, argv);
     try
     {
-        MainSettings w;
-        w.hide();
-        return a.exec();
+        MainSettings widget(configFile);
+        widget.hide();
+        return app.exec();
     }
     catch(const std::exception & err)
     {

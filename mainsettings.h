@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220506
+#define VERSION 20220510
 
 #include <QIcon>
 #include <QList>
@@ -165,7 +165,7 @@ class MainSettings : public QWidget
     QString startupCmd;
 
 public:
-    explicit MainSettings(QWidget *parent = 0);
+    explicit MainSettings(const QString & config, QWidget *parent = 0);
     ~MainSettings();
 
 protected:
@@ -177,8 +177,9 @@ protected:
     void cacheSaveItems(void);
     void cacheLoadItems(void);
     void configSave(void);
-    void configLoad(void);
-    void initXkbLayoutIcons(bool f = false);
+    bool configLoadLocal(void);
+    bool configLoadGlobal(const QString &);
+    void initXkbLayoutIcons(void);
     void startupProcess(void);
 
 private slots:

@@ -27,12 +27,15 @@
 #include <QPainter>
 #include <QProcess>
 #include <QByteArray>
+#include <QJsonValue>
 #include <QFontDialog>
 #include <QFileDialog>
 #include <QDataStream>
 #include <QTreeWidget>
+#include <QJsonObject>
 #include <QApplication>
 #include <QColorDialog>
+#include <QJsonDocument>
 #include <QStandardPaths>
 #include <QTreeWidgetItem>
 
@@ -43,7 +46,7 @@
 #include "ui_mainsettings.h"
 
 /* MainSettings */
-MainSettings::MainSettings(QWidget *parent) :
+MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) :
     QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr), soundClick(":/sounds/small2")
 {
     actionSettings = new QAction("Settings", this);
@@ -58,7 +61,8 @@ MainSettings::MainSettings(QWidget *parent) :
                                    "<p>Source code: <a href='%2'>%2</a></p>"
                                    "<p>Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
 
-    configLoad();
+    configLoadGlobal(globalConfigPath);
+    configLoadLocal();
     startupProcess();
 
     xcb = new XcbEventsPool(this);
@@ -70,7 +74,7 @@ MainSettings::MainSettings(QWidget *parent) :
     menu->addSeparator();
     menu->addAction(actionExit);
 
-    initXkbLayoutIcons(true);
+    initXkbLayoutIcons();
     int index = xcb->getXkbLayout();
 
     trayIcon = new QSystemTrayIcon(this);
@@ -174,7 +178,7 @@ void MainSettings::allowPictureMode(bool f)
     emit iconAttributeNotify();
 }
 
-void MainSettings::allowIconsPath(bool f)
+void MainSettings::allowIconsPath(bool)
 {
     emit iconAttributeNotify();
 }
@@ -260,7 +264,7 @@ void MainSettings::configSave(void)
           ui->checkBoxSound->isChecked();
 }
 
-void MainSettings::configLoad(void)
+bool MainSettings::configLoadLocal(void)
 {
     auto localData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(localData);
@@ -268,7 +272,7 @@ void MainSettings::configLoad(void)
 
     QFile file(configPath);
     if(! file.open(QIODevice::ReadOnly))
-        return;
+        return false;
 
     QDataStream ds(&file);
     int version;
@@ -308,6 +312,78 @@ void MainSettings::configLoad(void)
     bool sound;
     ds >> sound;
     ui->checkBoxSound->setChecked(sound);
+
+    return true;
+}
+
+bool MainSettings::configLoadGlobal(const QString & jsonPath)
+{
+    if(jsonPath.isEmpty())
+        return false;
+
+    QFile file(jsonPath);
+    if(! file.open(QIODevice::ReadOnly))
+    {
+        qWarning() << "error open file" << jsonPath;
+        return false;
+    }
+
+    auto data = file.readAll();
+    if(data.isEmpty())
+    {
+        qWarning() << "file empty" << jsonPath;
+        return false;
+    }
+
+    auto jsonDoc = QJsonDocument::fromJson(data);
+    if(jsonDoc.isEmpty())
+    {
+        qWarning() << "not json format" << jsonPath;
+        return false;
+    }
+
+    if(! jsonDoc.isObject())
+    {
+        qWarning() << "not json object" << jsonPath;
+        return false;
+    }
+
+    auto jsonObject = jsonDoc.object();
+    if(jsonObject.isEmpty())
+    {
+        qWarning() << "json empty" << jsonPath;
+        return false;
+    }
+
+    bool transparent = jsonObject.value("background:transparent").toBool();
+    ui->backgroundTransparent->setChecked(transparent);
+
+    QString startupCmd = jsonObject.value("startup:cmd").toString();
+    if(! startupCmd.isEmpty())
+    {
+        ui->checkBoxStartup->setChecked(true);
+        ui->lineEditStartup->setText(startupCmd);
+    }
+
+    QString backgroundColor = jsonObject.value("background:color").toString();
+    if(! backgroundColor.isEmpty())
+        ui->lineEditBackgroundColor->setText(backgroundColor);
+
+    QString textColor = jsonObject.value("text:color").toString();
+    if(! textColor.isEmpty())
+        ui->lineEditTextColor->setText(textColor);
+
+    QString labelFont = jsonObject.value("label:font").toString();
+    if(! labelFont.isEmpty())
+        ui->lineEditFont->setText(labelFont);
+
+    bool picmode = jsonObject.value("picture:mode").toBool();
+    ui->groupBoxPictureMode->setChecked(picmode);
+
+    bool sound = jsonObject.value("sound").toBool();
+    ui->checkBoxSound->setChecked(sound);
+
+    return true;
 }
 
 void MainSettings::cacheSaveItems(void)
@@ -557,7 +633,7 @@ QPixmap MainSettings::getLayoutIcon(const QString & layoutName)
     return QPixmap::fromImage(image);
 }
 
-void MainSettings::initXkbLayoutIcons(bool initXkbLayer)
+void MainSettings::initXkbLayoutIcons(void)
 {
     ui->systemInfo->setText(QString("xkb info: %1").arg(xcb->getSymbolsLabel()));
     layoutIcons.clear();
@@ -611,6 +687,8 @@ XcbConnection::XcbConnection() :
     if(!xkbstate)
         throw std::runtime_error("xkb_x11_state_new_from_device");
 
+    // XCB_XKB_MAP_PART_KEY_TYPES, XCB_XKB_MAP_PART_KEY_SYMS, XCB_XKB_MAP_PART_MODIFIER_MAP, XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS
+    // XCB_XKB_MAP_PART_KEY_ACTIONS, XCB_XKB_MAP_PART_VIRTUAL_MODS, XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP
     uint16_t required_map_parts = 0;
     uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
 
@@ -618,6 +696,7 @@ XcbConnection::XcbConnection() :
     if(GenericError(xcb_request_check(conn.get(), cookie)))
         throw std::runtime_error("xcb_xkb_select_events");
 
+    // grab  keyboard
     const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
     xcb_change_window_attributes(conn.get(), root, XCB_CW_EVENT_MASK, values);
 
