@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220510
+#define VERSION 20220608
 
 #include <QIcon>
 #include <QList>
@@ -64,6 +64,7 @@ struct GenericReply : std::shared_ptr<ReplyType>
 struct GenericError : std::shared_ptr<xcb_generic_error_t>
 {
     GenericError(xcb_generic_error_t* err) : std::shared_ptr<xcb_generic_error_t>(err, std::free) {}
+    QString toString(const char* func = nullptr) const;
 };
 
 struct GenericEvent : std::shared_ptr<xcb_generic_event_t>
@@ -91,6 +92,15 @@ ReplyError<Reply> getReply1(std::function<Reply*(xcb_connection_t*, Cookie, xcb_
     return ReplyError<Reply>(reply, error);
 }
 
+struct XcbPropertyReply : GenericReply<xcb_get_property_reply_t>
+{   
+    uint32_t length(void) { return xcb_get_property_value_length(get()); }
+    void* value(void) { return xcb_get_property_value(get()); }
+
+    XcbPropertyReply(xcb_get_property_reply_t* ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
+    XcbPropertyReply(const GenericReply<xcb_get_property_reply_t> & ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
+};
+
 struct XcbConnection
 {
 protected:
@@ -107,15 +117,26 @@ public:
     XcbConnection();
     virtual ~XcbConnection(){}
 
+    GenericError checkRequest(const xcb_void_cookie_t &) const;
+
     int getXkbLayout(void) const;
     bool switchXkbLayout(int layout = -1);
     QStringList getXkbNames(void) const;
 
     xcb_atom_t getAtom(const QString & name, bool create = true) const;
+
+    XcbPropertyReply getPropertyAnyType(xcb_window_t win, xcb_atom_t prop, uint32_t offset, uint32_t length) const;
+    xcb_atom_t getPropertyType(xcb_window_t, xcb_atom_t) const;
+
     xcb_window_t getActiveWindow(void) const;
     xcb_window_t getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0) const;
+    QString getPropertyString(xcb_window_t, xcb_atom_t) const;
 
     QString getAtomName(xcb_atom_t) const;
+
+    QString getWindowName(xcb_window_t) const;
+    bool setWindowName(xcb_window_t, const std::string &);
+
     QString getSymbolsLabel(void) const;
     QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
 
@@ -163,6 +184,7 @@ class MainSettings : public QWidget
     QList<QIcon> layoutIcons;
     QSound soundClick;
     QString startupCmd;
+    int activeWindow;
 
 public:
     explicit MainSettings(const QString & config, QWidget *parent = 0);
@@ -181,6 +203,7 @@ protected:
     bool configLoadGlobal(const QString &);
     void initXkbLayoutIcons(void);
     void startupProcess(void);
+    void activeWindowRevertTitle(void);
 
 private slots:
     void iconActivated(QSystemTrayIcon::ActivationReason reason);

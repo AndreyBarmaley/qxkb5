@@ -45,9 +45,30 @@
 #include "mainsettings.h"
 #include "ui_mainsettings.h"
 
+QString GenericError::toString(const char* func) const
+{
+    auto err = get();
+    
+    if(err)
+    {
+        auto str = QString("error code: %1, major: 0x%2, minor: 0x%3, sequence: %4").
+            arg((int) err->error_code).
+            arg(err->major_code, 2, 16, QChar('0')).
+            arg(err->minor_code, 4, 16, QChar('0')).
+            arg((uint) err->sequence);
+    
+        if(func)
+            return QString(func).append(" ").append(str);
+
+        return str;
+    }
+
+    return nullptr;
+}
+
 /* MainSettings */
 MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) :
-    QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr), soundClick(":/sounds/small2")
+    QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr), soundClick(":/sounds/small2"), activeWindow(0)
 {
     actionSettings = new QAction("Settings", this);
     actionExit = new QAction("Exit", this);
@@ -114,8 +135,10 @@ void MainSettings::startupProcess(void)
 
 void MainSettings::exitProgram(void)
 {
+    activeWindowRevertTitle();
     hide();
     close();
+
 }
 
 void MainSettings::showEvent(QShowEvent* event)
@@ -261,7 +284,9 @@ void MainSettings::configSave(void)
           ui->fromIconsPath->isChecked() <<
           ui->lineEditIconsPath->text() <<
           ui->lineEditStartup->text() <<
-          ui->checkBoxSound->isChecked();
+          ui->checkBoxSound->isChecked() <<
+          ui->checkBoxChangeTitle->isChecked() <<
+          ui->lineEditTitleFormat->text();
 }
 
 bool MainSettings::configLoadLocal(void)
@@ -312,6 +337,17 @@ bool MainSettings::configLoadLocal(void)
     bool sound;
     ds >> sound;
     ui->checkBoxSound->setChecked(sound);
+
+    if(20220510 < version)
+    {
+        bool changeTitle;
+        ds >> changeTitle;
+        ui->checkBoxChangeTitle->setChecked(changeTitle);
+
+        QString titleFormat;
+        ds >> titleFormat;
+        ui->lineEditTitleFormat->setText(titleFormat);
+    }
 
     return true;
 }
@@ -382,6 +418,12 @@ bool MainSettings::configLoadGlobal(const QString & jsonPath)
 
     bool sound = jsonObject.value("sound").toBool();
     ui->checkBoxSound->setChecked(sound);
+
+    bool changeTitle = jsonObject.value("title:change").toBool();
+    ui->checkBoxChangeTitle->setChecked(changeTitle);
+
+    QString titleFormat = jsonObject.value("title:format").toString();
+    ui->lineEditTitleFormat->setText(titleFormat);
 
     return true;
 }
@@ -512,39 +554,81 @@ void MainSettings::cacheItemClicked(QTreeWidgetItem* item, int column)
     }
 }
 
+void MainSettings::activeWindowRevertTitle(void)
+{
+    if(activeWindow)
+    {
+        auto list = xcb->getPropertyStringList(activeWindow, XCB_ATOM_WM_CLASS);
+        if(! list.empty())
+        {
+            auto item = cacheFindItem(list.front(), list.back());
+            if(item)
+            {
+                auto title = item->data(0, Qt::UserRole).toString();
+                xcb->setWindowName(activeWindow, title.toStdString());
+            }
+        }
+    }
+}
+
 void MainSettings::activeWindowChanged(int win)
 {
-    auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+    if(ui->checkBoxChangeTitle->isChecked())
+        activeWindowRevertTitle();
+
+    activeWindow = win;
+
+    auto list = xcb->getPropertyStringList(activeWindow, XCB_ATOM_WM_CLASS);
     if(list.empty()) return;
 
+    QString title = xcb->getWindowName(activeWindow);
     auto layout1 = xcb->getXkbLayout();
     auto names = xcb->getXkbNames();
 
     auto item = cacheFindItem(list.front(), list.back());
     if(item)
     {
+        // title
+        if(item->data(0, Qt::UserRole).isNull())
+            item->setData(0, Qt::UserRole, title);
+        else
+            title = item->data(0, Qt::UserRole).toString();
+
         auto layout2 = item->data(2, Qt::UserRole).toInt();
 
         if(layout2 != layout1)
+        {
             xcb->switchXkbLayout(layout2);
+            layout1 = layout2;
+        }
     }
     else
     if(names.size())
     {
         auto item = new QTreeWidgetItem(QStringList() << list.front() << list.back() << names.at(layout1) << "normal");
+        // title
+        item->setData(0, Qt::UserRole, title);
+        // layout
         item->setData(2, Qt::UserRole, layout1);
+        // state
         item->setData(3, Qt::UserRole, int(LayoutState::StateNormal));
         ui->treeWidgetCache->addTopLevelItem(item);
+    }
+
+    if(ui->checkBoxChangeTitle->isChecked())
+    {
+        auto format = ui->lineEditTitleFormat->text();
+        auto text = format.replace(QString("%{title}"), title).replace(QString("%{label}"), names.at(layout1));
+        xcb->setWindowName(activeWindow, text.toStdString());
     }
 }
 
 void MainSettings::xkbStateChanged(int layout1)
 {
-    auto win = xcb->getActiveWindow();
-    if(win == XCB_WINDOW_NONE)
+    if(0 == activeWindow)
         return;
 
-    auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+    auto list = xcb->getPropertyStringList(activeWindow, XCB_ATOM_WM_CLASS);
     if(list.empty()) return;
 
     auto names = xcb->getXkbNames();
@@ -579,6 +663,14 @@ void MainSettings::xkbStateChanged(int layout1)
         {
             if(soundClick.isFinished())
                 soundClick.play();
+        }
+
+        if(ui->checkBoxChangeTitle->isChecked())
+        {
+            auto title = item->data(0, Qt::UserRole).toString();
+            auto format = ui->lineEditTitleFormat->text();
+            auto text = format.replace(QString("%{title}"), title).replace(QString("%{label}"), names.at(layout1));
+            xcb->setWindowName(activeWindow, text.toStdString());
         }
     }
     else
@@ -803,6 +895,79 @@ int XcbConnection::getXkbLayout(void) const
         return reply->group;
 
     return 0;
+}
+
+XcbPropertyReply XcbConnection::getPropertyAnyType(xcb_window_t win, xcb_atom_t prop, uint32_t offset, uint32_t length) const
+{
+    auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, length);
+                
+    if(auto err = xcbReply.error())
+        qWarning() << err.toString("xcb_get_property");
+        
+    return xcbReply.reply();
+}
+
+xcb_atom_t XcbConnection::getPropertyType(xcb_window_t win, xcb_atom_t prop) const
+{
+    auto reply = getPropertyAnyType(win, prop, 0, 0);
+    return reply ? reply->type : (xcb_atom_t) XCB_ATOM_NONE;
+}
+
+QString XcbConnection::getWindowName(xcb_window_t win) const
+{
+    QString res = getPropertyString(win, XCB_ATOM_WM_NAME);
+
+    if(res.isEmpty())
+    {
+        auto utf8 = getAtom("UTF8_STRING");
+        auto prop = getAtom("_NET_WM_NAME");
+        auto type = getPropertyType(win, prop);
+
+        if(type == utf8)
+        {
+            if(auto reply = getPropertyAnyType(win, prop, 0, 8192))
+            {
+                auto ptr = reinterpret_cast<const char*>(reply.value());
+                if(ptr) res.append(ptr);
+            }
+        }
+    }
+
+    return res;
+}
+
+GenericError XcbConnection::checkRequest(const xcb_void_cookie_t & cookie) const
+{
+    return GenericError(xcb_request_check(conn.get(), cookie));
+}
+
+bool XcbConnection::setWindowName(xcb_window_t win, const std::string & title)
+{
+    auto prop = getAtom("_NET_WM_NAME");
+    auto utf8 = getAtom("UTF8_STRING");
+    auto cookie = xcb_change_property_checked(conn.get(), XCB_PROP_MODE_REPLACE, win, prop, utf8, 8, title.size(), title.data());
+
+    if(auto err = checkRequest(cookie))
+    {
+        qWarning() << err.toString("xcb_change_property");
+        return false;
+    }
+
+    return true;
+}
+
+QString XcbConnection::getPropertyString(xcb_window_t win, xcb_atom_t prop) const
+{
+    if(XCB_ATOM_STRING == getPropertyType(win, prop))
+    {
+        if(auto reply = getPropertyAnyType(win, prop, 0, 8192))
+        {
+            auto ptr = reinterpret_cast<const char*>(reply.value());
+            if(ptr) return QString(ptr);
+        }
+    }
+
+    return nullptr;
 }
 
 xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset) const

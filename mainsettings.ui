@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>336</height>
+    <height>354</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>3</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabAbout">
       <attribute name="title">
@@ -81,6 +81,23 @@
          </property>
          <property name="checked">
           <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBoxChangeTitle">
+         <property name="text">
+          <string>change active window title</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="lineEditTitleFormat">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>%{title} [%{label}]</string>
          </property>
         </widget>
        </item>
@@ -826,6 +843,22 @@
     <hint type="destinationlabel">
      <x>51</x>
      <y>146</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBoxChangeTitle</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>lineEditTitleFormat</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>87</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>117</y>
     </hint>
    </hints>
   </connection>

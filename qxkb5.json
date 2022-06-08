@@ -5,5 +5,7 @@
     "background:color": "#191970",
     "background:transparent": false,
     "text:color": "#ffffff",
-    "label:font": "Cantarell, 18, 50"
+    "label:font": "Cantarell, 18, 50",
+    "title:change": false,
+    "title:format": "%{title} [%{label}]"
 }
