@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220608
+#define VERSION 20220609
 
 #include <QIcon>
 #include <QList>
@@ -110,8 +110,10 @@ protected:
     std::unique_ptr<xkb_state, decltype(xkb_state_unref)*> xkbstate;
     const xcb_query_extension_reply_t* xkbext;
     xcb_window_t root;
-    xcb_atom_t activeWindowAtom;
     int32_t xkbdevid;
+    xcb_atom_t atomActiveWindow;
+    xcb_atom_t atomNetWmName;
+    xcb_atom_t atomUtf8String;
 
 public:
     XcbConnection();
@@ -136,6 +138,8 @@ public:
 
     QString getWindowName(xcb_window_t) const;
     bool setWindowName(xcb_window_t, const std::string &);
+
+    void setWindowEvents(xcb_window_t, uint32_t mask);
 
     QString getSymbolsLabel(void) const;
     QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
@@ -163,6 +167,8 @@ protected:
     void run() override;
 
 signals:
+    void keycodePressNotify(int, int);
+    void windowTitleNotify(int);
     void activeWindowNotify(int);
     void shutdownNotify(void);
     void xkbStateNotify(int);
@@ -184,7 +190,8 @@ class MainSettings : public QWidget
     QList<QIcon> layoutIcons;
     QSound soundClick;
     QString startupCmd;
-    int activeWindow;
+    QStringList skipClasses;
+    xcb_window_t prevWindow;
 
 public:
     explicit MainSettings(const QString & config, QWidget *parent = 0);
@@ -203,13 +210,15 @@ protected:
     bool configLoadGlobal(const QString &);
     void initXkbLayoutIcons(void);
     void startupProcess(void);
-    void activeWindowRevertTitle(void);
+    void windowRestoreTitle(xcb_window_t);
+    void windowUpdateTitle(xcb_window_t, const QString &, const QString &);
 
 private slots:
     void iconActivated(QSystemTrayIcon::ActivationReason reason);
     void exitProgram(void);
     void activeWindowChanged(int);
     void xkbStateChanged(int);
+    void windowTitleChanged(int);
     void selectBackgroundColor(void);
     void selectTextColor(void);
     void selectFont(void);

@@ -28,6 +28,7 @@
 #include <QProcess>
 #include <QByteArray>
 #include <QJsonValue>
+#include <QJsonArray>
 #include <QFontDialog>
 #include <QFileDialog>
 #include <QDataStream>
@@ -68,8 +69,9 @@ QString GenericError::toString(const char* func) const
 
 /* MainSettings */
 MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) :
-    QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr), soundClick(":/sounds/small2"), activeWindow(0)
+    QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr), soundClick(":/sounds/small2"), prevWindow(XCB_WINDOW_NONE)
 {
+    skipClasses << "qxkb5";
     actionSettings = new QAction("Settings", this);
     actionExit = new QAction("Exit", this);
 
@@ -108,6 +110,7 @@ MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) :
     connect(actionExit, SIGNAL(triggered()), this, SLOT(exitProgram()));
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(iconActivated(QSystemTrayIcon::ActivationReason)));
     connect(xcb, SIGNAL(activeWindowNotify(int)), this, SLOT(activeWindowChanged(int)));
+    connect(xcb, SIGNAL(windowTitleNotify(int)), this, SLOT(windowTitleChanged(int)));
     connect(xcb, SIGNAL(xkbStateNotify(int)), this, SLOT(xkbStateChanged(int)));
     connect(xcb, SIGNAL(shutdownNotify()), this, SLOT(exitProgram()));
     connect(xcb, SIGNAL(xkbNamesChanged()), this, SLOT(iconAttributeChanged()));
@@ -119,6 +122,7 @@ MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) :
 
 MainSettings::~MainSettings()
 {
+    windowRestoreTitle(prevWindow);
     delete ui;
 }
 
@@ -135,10 +139,8 @@ void MainSettings::startupProcess(void)
 
 void MainSettings::exitProgram(void)
 {
-    activeWindowRevertTitle();
     hide();
     close();
-
 }
 
 void MainSettings::showEvent(QShowEvent* event)
@@ -425,6 +427,9 @@ bool MainSettings::configLoadGlobal(const QString & jsonPath)
     QString titleFormat = jsonObject.value("title:format").toString();
     ui->lineEditTitleFormat->setText(titleFormat);
 
+    for(auto val : jsonObject.value("windows:skip").toArray())
+        skipClasses << val.toString();
+
     return true;
 }
 
@@ -500,7 +505,7 @@ void MainSettings::cacheLoadItems(void)
         auto names = xcb->getXkbNames();
         if(names.size())
         {
-            QString layout1 = names.size() > layout2 ? names.at(layout2) : names.front();
+            QString layout1 = 0 <= layout2 && names.size() > layout2 ? names.at(layout2) : names.front();
             QString state1 = layoutStateName(state2);
 
             auto item = new QTreeWidgetItem(QStringList() << class1 << class2 << layout1 << state1);
@@ -554,58 +559,95 @@ void MainSettings::cacheItemClicked(QTreeWidgetItem* item, int column)
     }
 }
 
-void MainSettings::activeWindowRevertTitle(void)
+void MainSettings::windowRestoreTitle(xcb_window_t win)
 {
-    if(activeWindow)
+    if(XCB_WINDOW_NONE != win)
     {
-        auto list = xcb->getPropertyStringList(activeWindow, XCB_ATOM_WM_CLASS);
-        if(! list.empty())
+        auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+        if(! list.empty() && ! skipClasses.contains(list.front(), Qt::CaseInsensitive))
         {
-            auto item = cacheFindItem(list.front(), list.back());
-            if(item)
+            if(auto item = cacheFindItem(list.front(), list.back()))
             {
                 auto title = item->data(0, Qt::UserRole).toString();
-                xcb->setWindowName(activeWindow, title.toStdString());
+                xcb->setWindowName(win, title.toStdString());
             }
+        }
+    }
+}
+
+void MainSettings::windowUpdateTitle(xcb_window_t win, const QString & title, const QString & label)
+{
+    auto format = ui->lineEditTitleFormat->text();
+    auto text = format.replace(QString("%{title}"), title).replace(QString("%{label}"), label);
+
+    xcb->setWindowEvents(win, XCB_EVENT_MASK_NO_EVENT);
+    xcb->setWindowName(win, text.toStdString());
+    xcb->setWindowEvents(win, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_KEY_PRESS);
+}
+
+void MainSettings::windowTitleChanged(int win)
+{
+    if(ui->checkBoxChangeTitle->isChecked())
+    {
+        auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+        if(! list.empty())
+        {
+            QString title = xcb->getWindowName(win);
+            auto layout = xcb->getXkbLayout();
+            auto names = xcb->getXkbNames();
+
+            // update backup title
+            if(auto item = cacheFindItem(list.front(), list.back()))
+                item->setData(0, Qt::UserRole, title);
+
+            if(static_cast<int>(prevWindow) == win &&
+                0 <= layout && layout < names.size())
+                windowUpdateTitle(prevWindow, title, names.at(layout));
         }
     }
 }
 
 void MainSettings::activeWindowChanged(int win)
 {
+    // disable events
+    xcb->setWindowEvents(prevWindow, XCB_EVENT_MASK_NO_EVENT);
+
     if(ui->checkBoxChangeTitle->isChecked())
-        activeWindowRevertTitle();
+        windowRestoreTitle(prevWindow);
 
-    activeWindow = win;
+    prevWindow = win;
 
-    auto list = xcb->getPropertyStringList(activeWindow, XCB_ATOM_WM_CLASS);
-    if(list.empty()) return;
+    // enable events
+    xcb->setWindowEvents(win, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_KEY_PRESS);
 
-    QString title = xcb->getWindowName(activeWindow);
+    // update cache
+    auto list = xcb->getPropertyStringList(win, XCB_ATOM_WM_CLASS);
+    if(list.empty() || skipClasses.contains(list.front(), Qt::CaseInsensitive)) return;
+
     auto layout1 = xcb->getXkbLayout();
     auto names = xcb->getXkbNames();
 
-    auto item = cacheFindItem(list.front(), list.back());
-    if(item)
+    if(auto item = cacheFindItem(list.front(), list.back()))
     {
-        // title
+        // backup title
         if(item->data(0, Qt::UserRole).isNull())
+        {
+            QString title = xcb->getWindowName(win);
             item->setData(0, Qt::UserRole, title);
-        else
-            title = item->data(0, Qt::UserRole).toString();
+        }
 
         auto layout2 = item->data(2, Qt::UserRole).toInt();
 
         if(layout2 != layout1)
-        {
             xcb->switchXkbLayout(layout2);
-            layout1 = layout2;
-        }
     }
     else
-    if(names.size())
+    // item not found
+    if(0 <= layout1 && layout1 < names.size())
     {
+        QString title = xcb->getWindowName(win);
         auto item = new QTreeWidgetItem(QStringList() << list.front() << list.back() << names.at(layout1) << "normal");
+
         // title
         item->setData(0, Qt::UserRole, title);
         // layout
@@ -615,21 +657,16 @@ void MainSettings::activeWindowChanged(int win)
         ui->treeWidgetCache->addTopLevelItem(item);
     }
 
-    if(ui->checkBoxChangeTitle->isChecked())
-    {
-        auto format = ui->lineEditTitleFormat->text();
-        auto text = format.replace(QString("%{title}"), title).replace(QString("%{label}"), names.at(layout1));
-        xcb->setWindowName(activeWindow, text.toStdString());
-    }
+    windowTitleChanged(win);
 }
 
 void MainSettings::xkbStateChanged(int layout1)
 {
-    if(0 == activeWindow)
+    if(0 == prevWindow)
         return;
 
-    auto list = xcb->getPropertyStringList(activeWindow, XCB_ATOM_WM_CLASS);
-    if(list.empty()) return;
+    auto list = xcb->getPropertyStringList(prevWindow, XCB_ATOM_WM_CLASS);
+    if(list.empty() || skipClasses.contains(list.front(), Qt::CaseInsensitive)) return;
 
     auto names = xcb->getXkbNames();
     auto item = cacheFindItem(list.front(), list.back());
@@ -648,7 +685,8 @@ void MainSettings::xkbStateChanged(int layout1)
                 xcb->switchXkbLayout(layout2);
             }
             else
-            if(state2 == LayoutState::StateNormal)
+            if(state2 == LayoutState::StateNormal &&
+                0 <= layout1 && layout1 < names.size())
             {
                 item->setText(2, names.at(layout1));
                 item->setData(2, Qt::UserRole, layout1);
@@ -665,16 +703,15 @@ void MainSettings::xkbStateChanged(int layout1)
                 soundClick.play();
         }
 
-        if(ui->checkBoxChangeTitle->isChecked())
+        if(ui->checkBoxChangeTitle->isChecked() &&
+            0 <= layout1 && layout1 < names.size())
         {
             auto title = item->data(0, Qt::UserRole).toString();
-            auto format = ui->lineEditTitleFormat->text();
-            auto text = format.replace(QString("%{title}"), title).replace(QString("%{label}"), names.at(layout1));
-            xcb->setWindowName(activeWindow, text.toStdString());
+            windowUpdateTitle(prevWindow, title, names.at(layout1));
         }
     }
     else
-    if(names.size())
+    if(0 <= layout1 && layout1 < names.size())
     {
         auto item = new QTreeWidgetItem(QStringList() << list.front() << list.back() << names.at(layout1) << "normal");
         item->setData(2, Qt::UserRole, layout1);
@@ -738,7 +775,7 @@ void MainSettings::initXkbLayoutIcons(void)
 XcbConnection::XcbConnection() :
     conn{ xcb_connect(nullptr, nullptr), xcb_disconnect },
     xkbctx{ nullptr, xkb_context_unref }, xkbmap{ nullptr, xkb_keymap_unref }, xkbstate{ nullptr, xkb_state_unref },
-    xkbext(nullptr), root(XCB_WINDOW_NONE), activeWindowAtom(XCB_ATOM_NONE), xkbdevid(-1)
+    xkbext(nullptr), root(XCB_WINDOW_NONE), xkbdevid(-1), atomActiveWindow(XCB_ATOM_NONE), atomNetWmName(XCB_ATOM_NONE), atomUtf8String(XCB_ATOM_NONE)
 {
     if(xcb_connection_has_error(conn.get()))
         throw std::runtime_error("xcb_connect");
@@ -752,7 +789,9 @@ XcbConnection::XcbConnection() :
         throw std::runtime_error("xcb_setup_roots");
 
     root = screen->root;
-    activeWindowAtom = getAtom("_NET_ACTIVE_WINDOW");
+    atomActiveWindow = getAtom("_NET_ACTIVE_WINDOW");
+    atomNetWmName = getAtom("_NET_WM_NAME");
+    atomUtf8String = getAtom("UTF8_STRING");
 
     xkbext = xcb_get_extension_data(conn.get(), &xcb_xkb_id);
     if(! xkbext)
@@ -788,7 +827,6 @@ XcbConnection::XcbConnection() :
     if(GenericError(xcb_request_check(conn.get(), cookie)))
         throw std::runtime_error("xcb_xkb_select_events");
 
-    // grab  keyboard
     const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
     xcb_change_window_attributes(conn.get(), root, XCB_CW_EVENT_MASK, values);
 
@@ -821,7 +859,7 @@ xcb_atom_t XcbConnection::getAtom(const QString & name, bool create) const
 
 xcb_window_t XcbConnection::getActiveWindow(void) const
 {
-    return getPropertyWindow(root, activeWindowAtom);
+    return getPropertyWindow(root, atomActiveWindow);
 }
 
 QString XcbConnection::getSymbolsLabel(void) const
@@ -915,17 +953,13 @@ xcb_atom_t XcbConnection::getPropertyType(xcb_window_t win, xcb_atom_t prop) con
 
 QString XcbConnection::getWindowName(xcb_window_t win) const
 {
-    QString res = getPropertyString(win, XCB_ATOM_WM_NAME);
+    QString res = getPropertyString(win, atomNetWmName);
 
     if(res.isEmpty())
     {
-        auto utf8 = getAtom("UTF8_STRING");
-        auto prop = getAtom("_NET_WM_NAME");
-        auto type = getPropertyType(win, prop);
-
-        if(type == utf8)
+        if(atomUtf8String == getPropertyType(win, atomNetWmName))
         {
-            if(auto reply = getPropertyAnyType(win, prop, 0, 8192))
+            if(auto reply = getPropertyAnyType(win, atomNetWmName, 0, 8192))
             {
                 auto ptr = reinterpret_cast<const char*>(reply.value());
                 if(ptr) res.append(ptr);
@@ -936,6 +970,15 @@ QString XcbConnection::getWindowName(xcb_window_t win) const
     return res;
 }
 
+void XcbConnection::setWindowEvents(xcb_window_t win, uint32_t mask)
+{
+    const uint32_t values[] = { mask };
+    auto cookie = xcb_change_window_attributes_checked(conn.get(), win, XCB_CW_EVENT_MASK, values);
+
+    if(auto err = checkRequest(cookie))
+        qWarning() << err.toString("xcb_change_window_attributes");
+}
+
 GenericError XcbConnection::checkRequest(const xcb_void_cookie_t & cookie) const
 {
     return GenericError(xcb_request_check(conn.get(), cookie));
@@ -943,9 +986,8 @@ GenericError XcbConnection::checkRequest(const xcb_void_cookie_t & cookie) const
 
 bool XcbConnection::setWindowName(xcb_window_t win, const std::string & title)
 {
-    auto prop = getAtom("_NET_WM_NAME");
-    auto utf8 = getAtom("UTF8_STRING");
-    auto cookie = xcb_change_property_checked(conn.get(), XCB_PROP_MODE_REPLACE, win, prop, utf8, 8, title.size(), title.data());
+    // set wm name
+    auto cookie = xcb_change_property(conn.get(), XCB_PROP_MODE_REPLACE, win, atomNetWmName, atomUtf8String, 8, title.size(), title.data());
 
     if(auto err = checkRequest(cookie))
     {
@@ -1050,14 +1092,38 @@ void XcbEventsPool::run(void)
 
             bool resetMapState = false;
 
+            if(XCB_KEY_PRESS == type)
+            {
+                if(auto kp = reinterpret_cast<xcb_key_press_event_t*>(ev.get()))
+                {
+                    emit keycodePressNotify(kp->detail, kp->state);
+                }
+            }
+            else
             if(XCB_PROPERTY_NOTIFY == type)
             {
-                auto pn = reinterpret_cast<xcb_property_notify_event_t*>(ev.get());
-                if(pn && pn->atom == activeWindowAtom)
+                if(auto pn = reinterpret_cast<xcb_property_notify_event_t*>(ev.get()))
                 {
-                    activeWindow = getActiveWindow();
-                    if(activeWindow != XCB_WINDOW_NONE)
-                        emit activeWindowNotify(activeWindow);
+                    // root window
+                    if(pn->window == root)
+                    {
+                        // changed property: active window
+                        if(pn->atom == atomActiveWindow)
+                        {
+                            activeWindow = getActiveWindow();
+                            if(activeWindow != XCB_WINDOW_NONE)
+                                emit activeWindowNotify(activeWindow);
+                        }
+                    }
+                    // other window
+                    else
+                    {
+                        // changed property: wm name
+                        if(pn->atom == atomNetWmName)
+                        {
+                            emit windowTitleNotify(pn->window);
+                        }
+                    }
                 }
             }
             else
@@ -1072,18 +1138,22 @@ void XcbEventsPool::run(void)
                 else
                 if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
                 {
-                    auto kn = reinterpret_cast< xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
-                    if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
-                        resetMapState = true;
+                    if(auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get()))
+                    {
+                        if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
+                            resetMapState = true;
+                    }
                 }
                 else
                 if(xkbev == XCB_XKB_STATE_NOTIFY)
                 {
-                    auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
-                    xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
+                    if(auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get()))
+                    {
+                        xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
                                                       sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
-                    if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
-                        emit xkbStateNotify(sn->group);
+                        if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
+                            emit xkbStateNotify(sn->group);
+                    }
                 }
 
                 if(resetMapState)
