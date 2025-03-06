@@ -24,6 +24,7 @@
 #include <QMenu>
 #include <QImage>
 #include <QColor>
+#include <QRegExp> 
 #include <QPainter>
 #include <QProcess>
 #include <QByteArray>
@@ -41,6 +42,7 @@
 #include <QTreeWidgetItem>
 
 #include <QDebug>
+#include <chrono>
 #include <exception>
 
 #include "mainsettings.h"
@@ -68,8 +70,7 @@ QString GenericError::toString(const char* func) const
 }
 
 /* MainSettings */
-MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) :
-    QWidget(parent), ui(new Ui::MainSettings), xcb(nullptr), soundClick(":/sounds/small2"), prevWindow(XCB_WINDOW_NONE)
+MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) : QWidget(parent), ui(new Ui::MainSettings)
 {
     skipClasses << "qxkb5";
     actionSettings = new QAction("Settings", this);
@@ -112,9 +113,13 @@ MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) :
     connect(xcb, SIGNAL(activeWindowNotify(int)), this, SLOT(activeWindowChanged(int)));
     connect(xcb, SIGNAL(windowTitleNotify(int)), this, SLOT(windowTitleChanged(int)));
     connect(xcb, SIGNAL(xkbStateNotify(int)), this, SLOT(xkbStateChanged(int)));
+    connect(xcb, SIGNAL(xkbNewKeyboardNotify(int)), this, SLOT(xkbNewKeyboardChanged(int)));
     connect(xcb, SIGNAL(shutdownNotify()), this, SLOT(exitProgram()));
     connect(xcb, SIGNAL(xkbNamesChanged()), this, SLOT(iconAttributeChanged()));
     connect(this, SIGNAL(iconAttributeNotify()), this, SLOT(iconAttributeChanged()));
+
+    if(ui->checkBoxPeriodicCheck->isChecked())
+	periodicCheckXkbRules = startTimer(std::chrono::seconds(2));
 
     // start events pool thread mode
     xcb->start();
@@ -130,10 +135,77 @@ void MainSettings::startupProcess(void)
 {
     if(ui->checkBoxStartup->isChecked() && !ui->lineEditStartup->text().isEmpty())
     {
+        QStringList args = ui->lineEditStartup->text().split(QRegExp("\\s+"));
+        auto cmd = args.front();
+        args.pop_front();
+
+        if(0)
+            qWarning() << "cmd: " << cmd << args;
+
         QProcess process(this);
-        process.start(ui->lineEditStartup->text());
+        process.setProgram(cmd);
+        process.setArguments(args);
+
+        process.start(QIODevice::NotOpen);
+
         if(process.waitForFinished())
             startupCmd = ui->lineEditStartup->text();
+
+        forceReload = false;
+    }
+}
+
+void MainSettings::screenSaverActiveChanged(bool state)
+{
+    if(! state)
+	startupProcess();
+}
+
+void MainSettings::keyPressEvent(QKeyEvent* ev)
+{
+    if(ui->tabWidget->currentWidget() == ui->tabCache)
+    {
+        if(ev->key() == Qt::Key_Delete)
+        {
+            if(auto item = ui->treeWidgetCache->currentItem())
+            {
+                int index = ui->treeWidgetCache->indexOfTopLevelItem(item);
+                ui->treeWidgetCache->takeTopLevelItem(index);
+            }
+        }
+    }
+}
+
+void MainSettings::timerEvent(QTimerEvent* ev)
+{
+    if(ev->timerId() == periodicCheckXkbRules)
+    {
+	QRegExp rx("-layout\\s+\"([\\w,]+)");
+	if(rx.indexIn(ui->lineEditStartup->text(), 0) != -1)
+	{
+	    auto names1 = rx.cap(1).split(",");
+	    auto names2 = xcb->getXkbNames();
+
+	    if(0)
+                qWarning() << "names1: " << names1 << "names2: " << names2;
+
+	    if(forceReload || names1.size() != names2.size())
+		startupProcess();
+	}
+    }
+}
+
+void MainSettings::periodicChecked(bool f)
+{
+    if(f)
+    {
+	killTimer(periodicCheckXkbRules);
+	periodicCheckXkbRules = startTimer(std::chrono::seconds(2));
+    }
+    else
+    if(0 < periodicCheckXkbRules)
+    {
+	killTimer(periodicCheckXkbRules);
     }
 }
 
@@ -288,7 +360,8 @@ void MainSettings::configSave(void)
           ui->lineEditStartup->text() <<
           ui->checkBoxSound->isChecked() <<
           ui->checkBoxChangeTitle->isChecked() <<
-          ui->lineEditTitleFormat->text();
+          ui->lineEditTitleFormat->text() <<
+          ui->checkBoxPeriodicCheck->isChecked();
 }
 
 bool MainSettings::configLoadLocal(void)
@@ -349,6 +422,13 @@ bool MainSettings::configLoadLocal(void)
         QString titleFormat;
         ds >> titleFormat;
         ui->lineEditTitleFormat->setText(titleFormat);
+    }
+
+    if(20220609 < version)
+    {
+	bool periodic;
+        ds >> periodic;
+	ui->checkBoxPeriodicCheck->setChecked(periodic);
     }
 
     return true;
@@ -429,6 +509,9 @@ bool MainSettings::configLoadGlobal(const QString & jsonPath)
 
     for(auto val : jsonObject.value("windows:skip").toArray())
         skipClasses << val.toString();
+
+    bool periodicCheck = jsonObject.value("periodic:check").toBool();
+    ui->checkBoxPeriodicCheck->setChecked(periodicCheck);
 
     return true;
 }
@@ -658,6 +741,17 @@ void MainSettings::activeWindowChanged(int win)
     }
 
     windowTitleChanged(win);
+}
+
+void MainSettings::xkbNewKeyboardChanged(int changed)
+{
+    // XCB_XKB_NKN_DETAIL_KEYCODES = 1, XCB_XKB_NKN_DETAIL_GEOMETRY = 2, XCB_XKB_NKN_DETAIL_DEVICE_ID = 4
+
+    if(changed & XCB_XKB_NKN_DETAIL_KEYCODES)
+        return;
+
+    if(changed & XCB_XKB_NKN_DETAIL_GEOMETRY)
+        forceReload = true;
 }
 
 void MainSettings::xkbStateChanged(int layout1)
@@ -922,6 +1016,11 @@ bool XcbConnection::switchXkbLayout(int layout)
     return false;
 }
 
+int XcbConnection::getDeviceId(void) const
+{
+    return xkbdevid;
+}
+
 int XcbConnection::getXkbLayout(void) const
 {
     auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
@@ -1132,16 +1231,99 @@ void XcbEventsPool::run(void)
                 auto xkbev = ev->pad0;
                 if(XCB_XKB_MAP_NOTIFY == xkbev)
                 {
-                    //auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
-                    resetMapState = true;
+                    if(auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get()))
+                    {
+/*
+typedef struct xcb_xkb_map_notify_event_t {
+    uint8_t         response_type;
+    uint8_t         xkbType;
+    uint16_t        sequence;
+    xcb_timestamp_t time;
+    uint8_t         deviceID;
+    uint8_t         ptrBtnActions;
+    uint16_t        changed;
+    xcb_keycode_t   minKeyCode;
+    xcb_keycode_t   maxKeyCode;
+    uint8_t         firstType;
+    uint8_t         nTypes;
+    xcb_keycode_t   firstKeySym;
+    uint8_t         nKeySyms;
+    xcb_keycode_t   firstKeyAct;
+    uint8_t         nKeyActs;
+    xcb_keycode_t   firstKeyBehavior;
+    uint8_t         nKeyBehavior;
+    xcb_keycode_t   firstKeyExplicit;
+    uint8_t         nKeyExplicit;
+    xcb_keycode_t   firstModMapKey;
+    uint8_t         nModMapKeys;
+    xcb_keycode_t   firstVModMapKey;
+    uint8_t         nVModMapKeys;
+    uint16_t        virtualMods;
+    uint8_t         pad0[2];
+} xcb_xkb_map_notify_event_t;
+*/
+
+                        resetMapState = true;
+
+			if(0)
+        		qWarning() << QString("new map notify - xkbType: %1, deviceID: %2, ptrBtnActions: 0x%3, keyCode: (%4, %5), chaged: 0x%6, time: %7").
+			    arg((int) mn->xkbType).
+			    arg((int) mn->deviceID).
+			    arg((int) mn->ptrBtnActions, 2, 16, QChar('0')).
+			    arg((int) mn->minKeyCode).
+			    arg((int) mn->maxKeyCode).
+			    arg((int) mn->changed, 4, 16, QChar('0')).
+			    arg((int) mn->time);
+                    }
                 }
                 else
                 if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
                 {
                     if(auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get()))
                     {
-                        if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
-                            resetMapState = true;
+/*
+typedef struct xcb_xkb_new_keyboard_notify_event_t {
+    uint8_t         response_type;
+    uint8_t         xkbType;
+    uint16_t        sequence;
+    xcb_timestamp_t time;
+    uint8_t         deviceID;
+    uint8_t         oldDeviceID;
+    xcb_keycode_t   minKeyCode;
+    xcb_keycode_t   maxKeyCode;
+    xcb_keycode_t   oldMinKeyCode;
+    xcb_keycode_t   oldMaxKeyCode;
+    uint8_t         requestMajor;
+    uint8_t         requestMinor;
+    uint16_t        changed;
+    uint8_t         pad0[14];
+} xcb_xkb_new_keyboard_notify_event_t;
+*/
+                        //if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
+                        //    resetMapState = true;
+
+			// changed: XCB_XKB_NKN_DETAIL_KEYCODES = 1, XCB_XKB_NKN_DETAIL_GEOMETRY = 2, XCB_XKB_NKN_DETAIL_DEVICE_ID  = 4
+
+			if(0)
+                        qWarning() << QString("new keyboard notify - xkbType: %1, deviceID: (%2,%3,%4), keyCode: (%5,%6), oldKeyCode: (%7,%8), chaged: 0x%9, time: %10").
+			    arg((int) kn->xkbType).
+			    arg((int) xkbdevid).
+			    arg((int) kn->deviceID).
+			    arg((int) kn->oldDeviceID).
+			    arg((int) kn->minKeyCode).
+			    arg((int) kn->maxKeyCode).
+			    arg((int) kn->oldMinKeyCode).
+			    arg((int) kn->oldMaxKeyCode).
+			    arg((int) kn->changed, 4, 16, QChar('0')).
+			    arg((int) kn->time);
+/*
+    // wifi mouse
+    "new keyboard notify - xkbType: 0, deviceID: (3,3,3), keyCode: (8,255), oldKeyCode: (8,255), chaged: 0x0002, time: 1557398869"
+    "new keyboard notify - xkbType: 0, deviceID: (3,5,5), keyCode: (8,255), oldKeyCode: (8,255), chaged: 0x0002, time: 1557398869"
+    "new keyboard notify - xkbType: 0, deviceID: (3,6,6), keyCode: (8,255), oldKeyCode: (8,255), chaged: 0x0002, time: 1557398869"
+*/
+                        if(xkbdevid == kn->deviceID)
+                            emit xkbNewKeyboardNotify(kn->changed);
                     }
                 }
                 else
@@ -1149,15 +1331,70 @@ void XcbEventsPool::run(void)
                 {
                     if(auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get()))
                     {
+/*
+typedef struct xcb_xkb_state_notify_event_t {
+    uint8_t         response_type;
+    uint8_t         xkbType;
+    uint16_t        sequence;
+    xcb_timestamp_t time;
+    uint8_t         deviceID;
+    uint8_t         mods;
+    uint8_t         baseMods;
+    uint8_t         latchedMods;
+    uint8_t         lockedMods;
+    uint8_t         group;
+    int16_t         baseGroup;
+    int16_t         latchedGroup;
+    uint8_t         lockedGroup;
+    uint8_t         compatState;
+    uint8_t         grabMods;
+    uint8_t         compatGrabMods;
+    uint8_t         lookupMods;
+    uint8_t         compatLoockupMods;
+    uint16_t        ptrBtnState;
+    uint16_t        changed;
+    xcb_keycode_t   keycode;
+    uint8_t         eventType;
+    uint8_t         requestMajor;
+    uint8_t         requestMinor;
+} xcb_xkb_state_notify_event_t;
+*/
+                        if(0)
+		        qWarning() << QString("new state notify - xkbType: %1, deviceID: %2, mods1(0x%3,0x%4,0x%5,0x%6), group(0x%7,0x%8,0x%9,0x%10), compatState: 0x%11, mods2(0x%12,0x%13,0x%14,0x%15), ptrBtnState: 0x%16, changed: 0x%17, keycode: %18, time: %19").
+			    arg((int) sn->xkbType).
+			    arg((int) sn->deviceID).
+			    arg((int) sn->mods, 2, 16, QChar('0')).
+			    arg((int) sn->baseMods, 2, 16, QChar('0')).
+			    arg((int) sn->latchedMods, 2, 16, QChar('0')).
+			    arg((int) sn->lockedMods, 2, 16, QChar('0')).
+			    arg((int) sn->group, 2, 16, QChar('0')).
+			    arg((int) sn->baseGroup, 4, 16, QChar('0')).
+			    arg((int) sn->latchedGroup, 4, 16, QChar('0')).
+			    arg((int) sn->lockedGroup, 2, 16, QChar('0')).
+			    arg((int) sn->compatState, 2, 16, QChar('0')).
+			    arg((int) sn->grabMods, 2, 16, QChar('0')).
+			    arg((int) sn->compatGrabMods, 2, 16, QChar('0')).
+			    arg((int) sn->lookupMods, 2, 18, QChar('0')).
+			    arg((int) sn->compatLoockupMods, 2, 18, QChar('0')).
+			    arg((int) sn->ptrBtnState, 4, 16, QChar('0')).
+			    arg((int) sn->changed, 4, 16, QChar('0')).
+			    arg((int) sn->keycode).
+			    arg((int) sn->time);
+
+
                         xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
                                                       sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+
                         if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
                             emit xkbStateNotify(sn->group);
                     }
+
                 }
 
                 if(resetMapState)
                 {
+		    qWarning() << "reset map state!";
+
                     // free state first
                     xkbstate.reset();
                     xkbmap.reset();

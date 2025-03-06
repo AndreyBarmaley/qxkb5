@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>354</height>
+    <height>409</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -128,6 +128,16 @@
          </property>
          <property name="readOnly">
           <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBoxPeriodicCheck">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>periodic checked</string>
          </property>
         </widget>
        </item>
@@ -485,8 +495,8 @@
    <slot>close()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>311</x>
-     <y>272</y>
+     <x>392</x>
+     <y>401</y>
     </hint>
     <hint type="destinationlabel">
      <x>196</x>
@@ -501,8 +511,8 @@
    <slot>selectBackgroundColor()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>362</x>
-     <y>56</y>
+     <x>39</x>
+     <y>81</y>
     </hint>
     <hint type="destinationlabel">
      <x>392</x>
@@ -517,8 +527,8 @@
    <slot>selectTextColor()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>378</x>
-     <y>126</y>
+     <x>39</x>
+     <y>89</y>
     </hint>
     <hint type="destinationlabel">
      <x>395</x>
@@ -533,8 +543,8 @@
    <slot>selectFont()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>378</x>
-     <y>157</y>
+     <x>39</x>
+     <y>93</y>
     </hint>
     <hint type="destinationlabel">
      <x>395</x>
@@ -549,8 +559,8 @@
    <slot>setBackgroundTransparent(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>86</y>
+     <x>103</x>
+     <y>55</y>
     </hint>
     <hint type="destinationlabel">
      <x>199</x>
@@ -565,8 +575,8 @@
    <slot>selectIconsPath()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>366</x>
-     <y>213</y>
+     <x>39</x>
+     <y>100</y>
     </hint>
     <hint type="destinationlabel">
      <x>199</x>
@@ -581,12 +591,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>364</x>
-     <y>62</y>
+     <x>39</x>
+     <y>81</y>
     </hint>
    </hints>
   </connection>
@@ -597,12 +607,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>360</x>
-     <y>117</y>
+     <x>39</x>
+     <y>89</y>
     </hint>
    </hints>
   </connection>
@@ -613,12 +623,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>367</x>
-     <y>151</y>
+     <x>39</x>
+     <y>93</y>
     </hint>
    </hints>
   </connection>
@@ -629,12 +639,12 @@
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>214</y>
+     <x>115</x>
+     <y>100</y>
     </hint>
     <hint type="destinationlabel">
-     <x>242</x>
-     <y>209</y>
+     <x>115</x>
+     <y>100</y>
     </hint>
    </hints>
   </connection>
@@ -645,12 +655,12 @@
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>214</y>
+     <x>115</x>
+     <y>100</y>
     </hint>
     <hint type="destinationlabel">
-     <x>364</x>
-     <y>213</y>
+     <x>39</x>
+     <y>100</y>
     </hint>
    </hints>
   </connection>
@@ -661,12 +671,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>280</x>
-     <y>63</y>
+     <x>115</x>
+     <y>81</y>
     </hint>
    </hints>
   </connection>
@@ -677,12 +687,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>312</x>
-     <y>112</y>
+     <x>115</x>
+     <y>89</y>
     </hint>
    </hints>
   </connection>
@@ -693,12 +703,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>306</x>
-     <y>156</y>
+     <x>115</x>
+     <y>93</y>
     </hint>
    </hints>
   </connection>
@@ -709,8 +719,8 @@
    <slot>allowIconsPath(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>214</y>
+     <x>115</x>
+     <y>100</y>
     </hint>
     <hint type="destinationlabel">
      <x>199</x>
@@ -725,8 +735,8 @@
    <slot>cacheItemClicked(QTreeWidgetItem*,int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>142</y>
+     <x>103</x>
+     <y>69</y>
     </hint>
     <hint type="destinationlabel">
      <x>199</x>
@@ -741,12 +751,12 @@
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>36</x>
-     <y>102</y>
+     <x>46</x>
+     <y>189</y>
     </hint>
     <hint type="destinationlabel">
-     <x>94</x>
-     <y>128</y>
+     <x>104</x>
+     <y>231</y>
     </hint>
    </hints>
   </connection>
@@ -757,8 +767,8 @@
    <slot>allowPictureMode(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
      <x>199</x>
@@ -773,12 +783,12 @@
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>199</x>
-     <y>214</y>
+     <x>115</x>
+     <y>100</y>
     </hint>
    </hints>
   </connection>
@@ -789,12 +799,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>199</x>
-     <y>86</y>
+     <x>103</x>
+     <y>55</y>
     </hint>
    </hints>
   </connection>
@@ -805,8 +815,8 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
      <x>75</x>
@@ -821,12 +831,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>51</x>
-     <y>115</y>
+     <x>61</x>
+     <y>89</y>
     </hint>
    </hints>
   </connection>
@@ -837,12 +847,12 @@
    <slot>setDisabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>199</x>
-     <y>220</y>
+     <x>103</x>
+     <y>70</y>
     </hint>
     <hint type="destinationlabel">
-     <x>51</x>
-     <y>146</y>
+     <x>61</x>
+     <y>93</y>
     </hint>
    </hints>
   </connection>
@@ -862,6 +872,38 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>checkBoxStartup</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>checkBoxPeriodicCheck</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>36</x>
+     <y>176</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>23</x>
+     <y>249</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBoxPeriodicCheck</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>MainSettings</receiver>
+   <slot>periodicChecked(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>199</x>
+     <y>250</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>204</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>allowIconsPath(bool)</slot>
@@ -872,5 +914,6 @@
   <slot>selectIconsPath()</slot>
   <slot>cacheItemClicked(QTreeWidgetItem*,int)</slot>
   <slot>allowPictureMode(bool)</slot>
+  <slot>periodicChecked(bool)</slot>
  </slots>
 </ui>

@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-comp
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 
-project(qxkb5 VERSION 20220212.1)
+project(qxkb5 VERSION 20250305.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)

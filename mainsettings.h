@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20220609
+#define VERSION 20250305
 
 #include <QIcon>
 #include <QList>
@@ -36,6 +36,8 @@
 #include <QPixmap>
 #include <QStringList>
 #include <QCloseEvent>
+#include <QTimerEvent>
+#include <QKeyEvent>
 #include <QSystemTrayIcon>
 #include <QTreeWidgetItem>
 
@@ -122,6 +124,7 @@ public:
     GenericError checkRequest(const xcb_void_cookie_t &) const;
 
     int getXkbLayout(void) const;
+    int getDeviceId(void) const;
     bool switchXkbLayout(int layout = -1);
     QStringList getXkbNames(void) const;
 
@@ -171,6 +174,7 @@ signals:
     void windowTitleNotify(int);
     void activeWindowNotify(int);
     void shutdownNotify(void);
+    void xkbNewKeyboardNotify(int);
     void xkbStateNotify(int);
     void xkbStateResetNotify(void);
     void xkbNamesChanged(void);
@@ -182,16 +186,18 @@ class MainSettings : public QWidget
 {
     Q_OBJECT
 
-    Ui::MainSettings* ui;
-    XcbEventsPool* xcb;
-    QSystemTrayIcon* trayIcon;
-    QAction* actionSettings;
-    QAction* actionExit;
+    Ui::MainSettings* ui = nullptr;
+    XcbEventsPool* xcb = nullptr;
+    QSystemTrayIcon* trayIcon = nullptr;
+    QAction* actionSettings = nullptr;
+    QAction* actionExit = nullptr;
     QList<QIcon> layoutIcons;
-    QSound soundClick;
+    QSound soundClick{":/sounds/small2"};
     QString startupCmd;
     QStringList skipClasses;
-    xcb_window_t prevWindow;
+    xcb_window_t prevWindow = XCB_WINDOW_NONE;
+    int periodicCheckXkbRules = 0;
+    bool forceReload = false;
 
 public:
     explicit MainSettings(const QString & config, QWidget *parent = 0);
@@ -201,6 +207,8 @@ protected:
     void closeEvent(QCloseEvent*) override;
     void showEvent(QShowEvent*) override;
     void hideEvent(QHideEvent*) override;
+    void timerEvent(QTimerEvent*) override;
+    void keyPressEvent(QKeyEvent*) override;
     QPixmap getLayoutIcon(const QString &);
     QTreeWidgetItem* cacheFindItem(const QString & class1, const QString & class2);
     void cacheSaveItems(void);
@@ -218,6 +226,7 @@ private slots:
     void exitProgram(void);
     void activeWindowChanged(int);
     void xkbStateChanged(int);
+    void xkbNewKeyboardChanged(int);
     void windowTitleChanged(int);
     void selectBackgroundColor(void);
     void selectTextColor(void);
@@ -228,6 +237,8 @@ private slots:
     void cacheItemClicked(QTreeWidgetItem*, int);
     void allowIconsPath(bool);
     void allowPictureMode(bool);
+    void periodicChecked(bool);
+    void screenSaverActiveChanged(bool);
 
 signals:
     void iconAttributeNotify(void);
