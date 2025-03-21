@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20250305
+#define VERSION 20250320
 
 #include <QIcon>
 #include <QList>
@@ -56,31 +56,27 @@ namespace Ui {
 }
 
 template<typename ReplyType>
-struct GenericReply : std::shared_ptr<ReplyType>
+struct GenericReply : std::unique_ptr<ReplyType, void(*)(void*)>
 {
-    GenericReply(ReplyType* ptr) : std::shared_ptr<ReplyType>(ptr, std::free)
-    {
-    }
+    GenericReply(ReplyType* ptr) : std::unique_ptr<ReplyType, void(*)(void*)>(ptr, std::free) {}
 };
 
-struct GenericError : std::shared_ptr<xcb_generic_error_t>
+struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>
 {
-    GenericError(xcb_generic_error_t* err) : std::shared_ptr<xcb_generic_error_t>(err, std::free) {}
+    GenericError(xcb_generic_error_t* err) : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>(err, std::free) {}
     QString toString(const char* func = nullptr) const;
 };
 
-struct GenericEvent : std::shared_ptr<xcb_generic_event_t>
+struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>
 {
-    GenericEvent(xcb_generic_event_t* ev) : std::shared_ptr<xcb_generic_event_t>(ev, std::free) {}
-    const xcb_generic_error_t*  toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
+    GenericEvent(xcb_generic_event_t* ev) : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, std::free) {}
+    const xcb_generic_error_t* toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
 };
 
 template<typename ReplyType>
 struct ReplyError : std::pair<GenericReply<ReplyType>, GenericError>
 {
-    ReplyError(ReplyType* ptr, xcb_generic_error_t* err) : std::pair<GenericReply<ReplyType>, GenericError>(ptr, err)
-    {
-    }
+    ReplyError(ReplyType* ptr, xcb_generic_error_t* err) : std::pair<GenericReply<ReplyType>, GenericError>(ptr, err) {}
 
     const GenericReply<ReplyType> & reply(void) const { return std::pair<GenericReply<ReplyType>, GenericError>::first; }
     const GenericError & error(void) const { return std::pair<GenericReply<ReplyType>, GenericError>::second; }
@@ -95,12 +91,12 @@ ReplyError<Reply> getReply1(std::function<Reply*(xcb_connection_t*, Cookie, xcb_
 }
 
 struct XcbPropertyReply : GenericReply<xcb_get_property_reply_t>
-{   
+{
     uint32_t length(void) { return xcb_get_property_value_length(get()); }
     void* value(void) { return xcb_get_property_value(get()); }
 
     XcbPropertyReply(xcb_get_property_reply_t* ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
-    XcbPropertyReply(const GenericReply<xcb_get_property_reply_t> & ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
+    XcbPropertyReply( GenericReply<xcb_get_property_reply_t> && ptr) noexcept : GenericReply<xcb_get_property_reply_t>(std::move(ptr)) {}
 };
 
 struct XcbConnection
@@ -185,6 +181,8 @@ enum LayoutState { StateNormal, StateFirst, StateFixed };
 class MainSettings : public QWidget
 {
     Q_OBJECT
+
+    // std::unique_ptr<QDBusInterface> dbusInterfacePtr;
 
     Ui::MainSettings* ui = nullptr;
     XcbEventsPool* xcb = nullptr;

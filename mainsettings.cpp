@@ -107,6 +107,24 @@ MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) : 
     trayIcon->setContextMenu(menu);
     trayIcon->show();
 
+/*
+    // session screensaver
+    const char* service = "org.mate.ScreenSaver";
+    const char* path = "/org/mate/ScreenSaver";
+    const char* interface = "org.mate.ScreenSaver";
+
+    dbusInterfacePtr.reset(new QDBusInterface(service, path, interface, QDBusConnection::sessionBus()));
+    if(dbusInterfacePtr->isValid())
+    {
+        connect(dbusInterfacePtr.get(), SIGNAL(ActiveChanged(bool)), this, SLOT(screenSaverActiveChanged(bool)));
+    }
+    else
+    {
+        qWarning() << "dbus interface not found: " << service;
+        dbusInterfacePtr.reset();
+    }
+*/
+
     connect(actionSettings, SIGNAL(triggered()), this, SLOT(show()));
     connect(actionExit, SIGNAL(triggered()), this, SLOT(exitProgram()));
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(iconActivated(QSystemTrayIcon::ActivationReason)));
@@ -931,7 +949,7 @@ QString XcbConnection::getAtomName(xcb_atom_t atom) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn.get(), atom);
 
-    if(auto reply = xcbReply.reply())
+    if(auto & reply = xcbReply.reply())
     {
         const char* name = xcb_get_atom_name_name(reply.get());
         size_t len = xcb_get_atom_name_name_length(reply.get());
@@ -963,7 +981,7 @@ QString XcbConnection::getSymbolsLabel(void) const
     if(xcbReply.error())
         throw std::runtime_error("xcb_xkb_get_names");
 
-    if(auto reply = xcbReply.reply())
+    if(auto & reply = xcbReply.reply())
     {
         const void *buffer = xcb_xkb_get_names_value_list(reply.get());
         xcb_xkb_get_names_value_list_t list;
@@ -984,7 +1002,7 @@ QStringList XcbConnection::getXkbNames(void) const
         throw std::runtime_error("xcb_xkb_get_names");
 
     QStringList res;
-    if(auto reply = xcbReply.reply())
+    if(auto & reply = xcbReply.reply())
     {
         const void *buffer = xcb_xkb_get_names_value_list(reply.get());
         xcb_xkb_get_names_value_list_t list;
@@ -1028,7 +1046,7 @@ int XcbConnection::getXkbLayout(void) const
     if(xcbReply.error())
         throw std::runtime_error("xcb_xkb_get_state");
 
-    if(auto reply = xcbReply.reply())
+    if(auto & reply = xcbReply.reply())
         return reply->group;
 
     return 0;
@@ -1038,10 +1056,10 @@ XcbPropertyReply XcbConnection::getPropertyAnyType(xcb_window_t win, xcb_atom_t 
 {
     auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, length);
                 
-    if(auto err = xcbReply.error())
+    if(auto & err = xcbReply.error())
         qWarning() << err.toString("xcb_get_property");
         
-    return xcbReply.reply();
+    return XcbPropertyReply(std::move(xcbReply.first));
 }
 
 xcb_atom_t XcbConnection::getPropertyType(xcb_window_t win, xcb_atom_t prop) const
@@ -1118,7 +1136,7 @@ xcb_window_t XcbConnection::getPropertyWindow(xcb_window_t win, xcb_atom_t prop,
     if(xcbReply.error())
         return XCB_WINDOW_NONE;
 
-    if(auto reply = xcbReply.reply())
+    if(auto & reply = xcbReply.reply())
     {
         if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
             return *res;
@@ -1135,7 +1153,7 @@ QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t pr
     if(xcbReply.error())
         return res;
 
-    if(auto reply = xcbReply.reply())
+    if(auto & reply = xcbReply.reply())
     {
         int len = xcb_get_property_value_length(reply.get());
         auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
