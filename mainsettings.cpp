@@ -20,11 +20,11 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <QUrl>
 #include <QDir>
 #include <QMenu>
 #include <QImage>
 #include <QColor>
-#include <QRegExp> 
 #include <QPainter>
 #include <QProcess>
 #include <QByteArray>
@@ -40,6 +40,7 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 #include <QTreeWidgetItem>
+#include <QRegularExpression> 
 
 #include <QDebug>
 #include <chrono>
@@ -85,6 +86,10 @@ MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) : 
                                    "<p>Source code: <a href='%2'>%2</a></p>"
                                    "<p>Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com></p>").arg(version).arg(github));
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    soundClick.setSource(QUrl("qrc:/sounds/small2"));
+#endif
+    
     configLoadGlobal(globalConfigPath);
     configLoadLocal();
     startupProcess();
@@ -153,7 +158,7 @@ void MainSettings::startupProcess(void)
 {
     if(ui->checkBoxStartup->isChecked() && !ui->lineEditStartup->text().isEmpty())
     {
-        QStringList args = ui->lineEditStartup->text().split(QRegExp("\\s+"));
+        QStringList args = ui->lineEditStartup->text().split(QRegularExpression("\\s+"));
         auto cmd = args.front();
         args.pop_front();
 
@@ -198,10 +203,10 @@ void MainSettings::timerEvent(QTimerEvent* ev)
 {
     if(ev->timerId() == periodicCheckXkbRules)
     {
-	QRegExp rx("-layout\\s+\"([\\w,]+)");
-	if(rx.indexIn(ui->lineEditStartup->text(), 0) != -1)
+	QRegularExpression rx("-layout\\s+\"([\\w,]+)");
+	if(auto match = rx.match(ui->lineEditStartup->text()); match.hasMatch())
 	{
-	    auto names1 = rx.cap(1).split(",");
+	    auto names1 = match.captured(1).split(",");
 	    auto names2 = xcb->getXkbNames();
 
 	    if(0)
@@ -323,7 +328,7 @@ void MainSettings::selectFont(void)
     if(1 < fontArgs.size())
         font.setPointSize(fontArgs.at(1).toInt());
     if(2 < fontArgs.size())
-        font.setWeight(fontArgs.at(2).toInt());
+        font.setWeight((QFont::Weight) fontArgs.at(2).toInt());
 
     QFontDialog dialog(this);
     dialog.setCurrentFont(font);
@@ -811,7 +816,7 @@ void MainSettings::xkbStateChanged(int layout1)
 
         if(play && ui->checkBoxSound->isChecked())
         {
-            if(soundClick.isFinished())
+            if(! soundClick.isPlaying())
                 soundClick.play();
         }
 
@@ -866,7 +871,7 @@ QPixmap MainSettings::getLayoutIcon(const QString & layoutName)
     if(1 < fontArgs.size())
         font.setPointSize(fontArgs.at(1).toInt());
     if(2 < fontArgs.size())
-        font.setWeight(fontArgs.at(2).toInt());
+        font.setWeight((QFont::Weight) fontArgs.at(2).toInt());
 
     painter.setFont(font);
     painter.drawText(image.rect(), Qt::AlignCenter, layoutName.left(2));

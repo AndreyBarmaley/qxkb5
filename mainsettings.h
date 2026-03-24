@@ -23,11 +23,10 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20250320
+#define VERSION 20260320
 
 #include <QIcon>
 #include <QList>
-#include <QSound>
 #include <QObject>
 #include <QThread>
 #include <QWidget>
@@ -40,6 +39,12 @@
 #include <QKeyEvent>
 #include <QSystemTrayIcon>
 #include <QTreeWidgetItem>
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QSoundEffect>
+#else
+#include <QSound>
+#endif
 
 #include <atomic>
 #include <memory>
@@ -190,7 +195,11 @@ class MainSettings : public QWidget
     QAction* actionSettings = nullptr;
     QAction* actionExit = nullptr;
     QList<QIcon> layoutIcons;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QSoundEffect soundClick;
+#else
     QSound soundClick{":/sounds/small2"};
+#endif
     QString startupCmd;
     QStringList skipClasses;
     xcb_window_t prevWindow = XCB_WINDOW_NONE;
