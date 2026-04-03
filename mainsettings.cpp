@@ -94,7 +94,7 @@ MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) : 
     configLoadLocal();
     startupProcess();
 
-    xcb = new XcbEventsPool(this);
+    xcb = new XcbEventsPool(toDebug, this);
 
     cacheLoadItems();
 
@@ -162,8 +162,9 @@ void MainSettings::startupProcess(void)
         auto cmd = args.front();
         args.pop_front();
 
-        if(0)
+        if(toDebug) {
             qWarning() << "cmd: " << cmd << args;
+        }
 
         QProcess process(this);
         process.setProgram(cmd);
@@ -209,8 +210,9 @@ void MainSettings::timerEvent(QTimerEvent* ev)
 	    auto names1 = match.captured(1).split(",");
 	    auto names2 = xcb->getXkbNames();
 
-	    if(0)
+	    if(toDebug) {
                 qWarning() << "names1: " << names1 << "names2: " << names2;
+            }
 
 	    if(forceReload || names1.size() != names2.size())
 		startupProcess();
@@ -495,6 +497,8 @@ bool MainSettings::configLoadGlobal(const QString & jsonPath)
         qWarning() << "json empty" << jsonPath;
         return false;
     }
+
+    toDebug = jsonObject.value("debug").toBool();
 
     bool transparent = jsonObject.value("background:transparent").toBool();
     ui->backgroundTransparent->setChecked(transparent);
@@ -816,8 +820,13 @@ void MainSettings::xkbStateChanged(int layout1)
 
         if(play && ui->checkBoxSound->isChecked())
         {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
             if(! soundClick.isPlaying())
                 soundClick.play();
+#else
+            if(soundClick.isFinished())
+                soundClick.play();
+#endif
         }
 
         if(ui->checkBoxChangeTitle->isChecked() &&
@@ -889,10 +898,11 @@ void MainSettings::initXkbLayoutIcons(void)
 }
 
 /* XcbConnection */
-XcbConnection::XcbConnection() :
+XcbConnection::XcbConnection(bool debug) :
     conn{ xcb_connect(nullptr, nullptr), xcb_disconnect },
     xkbctx{ nullptr, xkb_context_unref }, xkbmap{ nullptr, xkb_keymap_unref }, xkbstate{ nullptr, xkb_state_unref },
-    xkbext(nullptr), root(XCB_WINDOW_NONE), xkbdevid(-1), atomActiveWindow(XCB_ATOM_NONE), atomNetWmName(XCB_ATOM_NONE), atomUtf8String(XCB_ATOM_NONE)
+    xkbext(nullptr), root(XCB_WINDOW_NONE), xkbdevid(-1), atomActiveWindow(XCB_ATOM_NONE), atomNetWmName(XCB_ATOM_NONE), atomUtf8String(XCB_ATOM_NONE),
+    toDebug(debug)
 {
     if(xcb_connection_has_error(conn.get()))
         throw std::runtime_error("xcb_connect");
@@ -1060,9 +1070,12 @@ int XcbConnection::getXkbLayout(void) const
 XcbPropertyReply XcbConnection::getPropertyAnyType(xcb_window_t win, xcb_atom_t prop, uint32_t offset, uint32_t length) const
 {
     auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, length);
-                
-    if(auto & err = xcbReply.error())
-        qWarning() << err.toString("xcb_get_property");
+
+    if(auto & err = xcbReply.error()) {
+        if(toDebug) {
+            qWarning() << err.toString("xcb_get_property");
+        }
+    }
         
     return XcbPropertyReply(std::move(xcbReply.first));
 }
@@ -1097,8 +1110,11 @@ void XcbConnection::setWindowEvents(xcb_window_t win, uint32_t mask)
     const uint32_t values[] = { mask };
     auto cookie = xcb_change_window_attributes_checked(conn.get(), win, XCB_CW_EVENT_MASK, values);
 
-    if(auto err = checkRequest(cookie))
-        qWarning() << err.toString("xcb_change_window_attributes");
+    if(auto err = checkRequest(cookie)) {
+        if(toDebug) {
+            qWarning() << err.toString("xcb_change_window_attributes");
+        }
+    }
 }
 
 GenericError XcbConnection::checkRequest(const xcb_void_cookie_t & cookie) const
@@ -1113,7 +1129,9 @@ bool XcbConnection::setWindowName(xcb_window_t win, const std::string & title)
 
     if(auto err = checkRequest(cookie))
     {
-        qWarning() << err.toString("xcb_change_property");
+        if(toDebug) {
+            qWarning() << err.toString("xcb_change_property");
+        }
         return false;
     }
 
@@ -1171,7 +1189,7 @@ QStringList XcbConnection::getPropertyStringList(xcb_window_t win, xcb_atom_t pr
 }
 
 /* XcbEventsPool */
-XcbEventsPool::XcbEventsPool(QObject* obj) : QThread(obj), shutdown(false)
+XcbEventsPool::XcbEventsPool(bool debug, QObject* obj) : QThread(obj), XcbConnection(debug), shutdown(false)
 {
     connect(this, & XcbEventsPool::xkbStateResetNotify, [this](){ emit xkbNamesChanged(); });
 }
@@ -1288,15 +1306,16 @@ typedef struct xcb_xkb_map_notify_event_t {
 
                         resetMapState = true;
 
-			if(0)
-        		qWarning() << QString("new map notify - xkbType: %1, deviceID: %2, ptrBtnActions: 0x%3, keyCode: (%4, %5), chaged: 0x%6, time: %7").
-			    arg((int) mn->xkbType).
-			    arg((int) mn->deviceID).
-			    arg((int) mn->ptrBtnActions, 2, 16, QChar('0')).
-			    arg((int) mn->minKeyCode).
-			    arg((int) mn->maxKeyCode).
-			    arg((int) mn->changed, 4, 16, QChar('0')).
-			    arg((int) mn->time);
+			if(toDebug) {
+        		    qWarning() << QString("new map notify - xkbType: %1, deviceID: %2, ptrBtnActions: 0x%3, keyCode: (%4, %5), chaged: 0x%6, time: %7").
+			        arg((int) mn->xkbType).
+			        arg((int) mn->deviceID).
+			        arg((int) mn->ptrBtnActions, 2, 16, QChar('0')).
+			        arg((int) mn->minKeyCode).
+			        arg((int) mn->maxKeyCode).
+			        arg((int) mn->changed, 4, 16, QChar('0')).
+			        arg((int) mn->time);
+			}
                     }
                 }
                 else
@@ -1327,18 +1346,19 @@ typedef struct xcb_xkb_new_keyboard_notify_event_t {
 
 			// changed: XCB_XKB_NKN_DETAIL_KEYCODES = 1, XCB_XKB_NKN_DETAIL_GEOMETRY = 2, XCB_XKB_NKN_DETAIL_DEVICE_ID  = 4
 
-			if(0)
-                        qWarning() << QString("new keyboard notify - xkbType: %1, deviceID: (%2,%3,%4), keyCode: (%5,%6), oldKeyCode: (%7,%8), chaged: 0x%9, time: %10").
-			    arg((int) kn->xkbType).
-			    arg((int) xkbdevid).
-			    arg((int) kn->deviceID).
-			    arg((int) kn->oldDeviceID).
-			    arg((int) kn->minKeyCode).
-			    arg((int) kn->maxKeyCode).
-			    arg((int) kn->oldMinKeyCode).
-			    arg((int) kn->oldMaxKeyCode).
-			    arg((int) kn->changed, 4, 16, QChar('0')).
-			    arg((int) kn->time);
+			if(toDebug) {
+                            qWarning() << QString("new keyboard notify - xkbType: %1, deviceID: (%2,%3,%4), keyCode: (%5,%6), oldKeyCode: (%7,%8), chaged: 0x%9, time: %10").
+			        arg((int) kn->xkbType).
+			        arg((int) xkbdevid).
+			        arg((int) kn->deviceID).
+			        arg((int) kn->oldDeviceID).
+			        arg((int) kn->minKeyCode).
+			        arg((int) kn->maxKeyCode).
+			        arg((int) kn->oldMinKeyCode).
+			        arg((int) kn->oldMaxKeyCode).
+			        arg((int) kn->changed, 4, 16, QChar('0')).
+			        arg((int) kn->time);
+		        }
 /*
     // wifi mouse
     "new keyboard notify - xkbType: 0, deviceID: (3,3,3), keyCode: (8,255), oldKeyCode: (8,255), chaged: 0x0002, time: 1557398869"
@@ -1382,28 +1402,28 @@ typedef struct xcb_xkb_state_notify_event_t {
     uint8_t         requestMinor;
 } xcb_xkb_state_notify_event_t;
 */
-                        if(0)
-		        qWarning() << QString("new state notify - xkbType: %1, deviceID: %2, mods1(0x%3,0x%4,0x%5,0x%6), group(0x%7,0x%8,0x%9,0x%10), compatState: 0x%11, mods2(0x%12,0x%13,0x%14,0x%15), ptrBtnState: 0x%16, changed: 0x%17, keycode: %18, time: %19").
-			    arg((int) sn->xkbType).
-			    arg((int) sn->deviceID).
-			    arg((int) sn->mods, 2, 16, QChar('0')).
-			    arg((int) sn->baseMods, 2, 16, QChar('0')).
-			    arg((int) sn->latchedMods, 2, 16, QChar('0')).
-			    arg((int) sn->lockedMods, 2, 16, QChar('0')).
-			    arg((int) sn->group, 2, 16, QChar('0')).
-			    arg((int) sn->baseGroup, 4, 16, QChar('0')).
-			    arg((int) sn->latchedGroup, 4, 16, QChar('0')).
-			    arg((int) sn->lockedGroup, 2, 16, QChar('0')).
-			    arg((int) sn->compatState, 2, 16, QChar('0')).
-			    arg((int) sn->grabMods, 2, 16, QChar('0')).
-			    arg((int) sn->compatGrabMods, 2, 16, QChar('0')).
-			    arg((int) sn->lookupMods, 2, 18, QChar('0')).
-			    arg((int) sn->compatLoockupMods, 2, 18, QChar('0')).
-			    arg((int) sn->ptrBtnState, 4, 16, QChar('0')).
-			    arg((int) sn->changed, 4, 16, QChar('0')).
-			    arg((int) sn->keycode).
-			    arg((int) sn->time);
-
+                        if(toDebug) {
+		            qWarning() << QString("new state notify - xkbType: %1, deviceID: %2, mods1(0x%3,0x%4,0x%5,0x%6), group(0x%7,0x%8,0x%9,0x%10), compatState: 0x%11, mods2(0x%12,0x%13,0x%14,0x%15), ptrBtnState: 0x%16, changed: 0x%17, keycode: %18, time: %19").
+			        arg((int) sn->xkbType).
+			        arg((int) sn->deviceID).
+			        arg((int) sn->mods, 2, 16, QChar('0')).
+			        arg((int) sn->baseMods, 2, 16, QChar('0')).
+			        arg((int) sn->latchedMods, 2, 16, QChar('0')).
+			        arg((int) sn->lockedMods, 2, 16, QChar('0')).
+			        arg((int) sn->group, 2, 16, QChar('0')).
+			        arg((int) sn->baseGroup, 4, 16, QChar('0')).
+			        arg((int) sn->latchedGroup, 4, 16, QChar('0')).
+			        arg((int) sn->lockedGroup, 2, 16, QChar('0')).
+			        arg((int) sn->compatState, 2, 16, QChar('0')).
+			        arg((int) sn->grabMods, 2, 16, QChar('0')).
+			        arg((int) sn->compatGrabMods, 2, 16, QChar('0')).
+			        arg((int) sn->lookupMods, 2, 18, QChar('0')).
+			        arg((int) sn->compatLoockupMods, 2, 18, QChar('0')).
+			        arg((int) sn->ptrBtnState, 4, 16, QChar('0')).
+			        arg((int) sn->changed, 4, 16, QChar('0')).
+			        arg((int) sn->keycode).
+			        arg((int) sn->time);
+			}
 
                         xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
                                                       sn->baseGroup, sn->latchedGroup, sn->lockedGroup);

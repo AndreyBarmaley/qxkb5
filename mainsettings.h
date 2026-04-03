@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20260320
+#define VERSION 20260403
 
 #include <QIcon>
 #include <QList>
@@ -117,9 +117,10 @@ protected:
     xcb_atom_t atomActiveWindow;
     xcb_atom_t atomNetWmName;
     xcb_atom_t atomUtf8String;
+    bool toDebug = false;
 
 public:
-    XcbConnection();
+    XcbConnection(bool debug);
     virtual ~XcbConnection(){}
 
     GenericError checkRequest(const xcb_void_cookie_t &) const;
@@ -164,7 +165,7 @@ class XcbEventsPool : public QThread, public XcbConnection
     std::atomic<bool> shutdown;
 
 public:
-    XcbEventsPool(QObject*);
+    XcbEventsPool(bool debug, QObject*);
     ~XcbEventsPool();
 
 protected:
@@ -205,6 +206,7 @@ class MainSettings : public QWidget
     xcb_window_t prevWindow = XCB_WINDOW_NONE;
     int periodicCheckXkbRules = 0;
     bool forceReload = false;
+    bool toDebug = false;
 
 public:
     explicit MainSettings(const QString & config, QWidget *parent = 0);
