@@ -31,8 +31,7 @@
 #include <QCommandLineParser>
 #include <exception>
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName("QXkb5");
     QCoreApplication::setApplicationVersion(QString::number(VERSION));
@@ -52,20 +51,16 @@ int main(int argc, char *argv[])
     auto lockPath = QDir(localData).absoluteFilePath("lock");
     QLockFile lockFile(lockPath);
 
-    if(! lockFile.tryLock(100))
-    {
+    if(! lockFile.tryLock(100)) {
         qWarning() << "also running, see lock" << lockPath;
         return 1;
     }
 
-    try
-    {
+    try {
         MainSettings widget(configFile);
         widget.hide();
         return app.exec();
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         qWarning() << err.what();
     }
 

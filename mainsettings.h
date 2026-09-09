@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20260403
+#define VERSION 20260909
 
 #include <QIcon>
 #include <QList>
@@ -61,52 +61,55 @@ namespace Ui {
 }
 
 template<typename ReplyType>
-struct GenericReply : std::unique_ptr<ReplyType, void(*)(void*)>
-{
+struct GenericReply : std::unique_ptr<ReplyType, void(*)(void*)> {
     GenericReply(ReplyType* ptr) : std::unique_ptr<ReplyType, void(*)(void*)>(ptr, std::free) {}
 };
 
-struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>
-{
+struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)> {
     GenericError(xcb_generic_error_t* err) : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>(err, std::free) {}
     QString toString(const char* func = nullptr) const;
 };
 
-struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>
-{
+struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)> {
     GenericEvent(xcb_generic_event_t* ev) : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, std::free) {}
-    const xcb_generic_error_t* toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
+    const xcb_generic_error_t* toerror(void) const {
+        return reinterpret_cast<const xcb_generic_error_t*>(get());
+    }
 };
 
 template<typename ReplyType>
-struct ReplyError : std::pair<GenericReply<ReplyType>, GenericError>
-{
+struct ReplyError : std::pair<GenericReply<ReplyType>, GenericError> {
     ReplyError(ReplyType* ptr, xcb_generic_error_t* err) : std::pair<GenericReply<ReplyType>, GenericError>(ptr, err) {}
 
-    const GenericReply<ReplyType> & reply(void) const { return std::pair<GenericReply<ReplyType>, GenericError>::first; }
-    const GenericError & error(void) const { return std::pair<GenericReply<ReplyType>, GenericError>::second; }
+    const GenericReply<ReplyType> & reply(void) const {
+        return std::pair<GenericReply<ReplyType>, GenericError>::first;
+    }
+    const GenericError & error(void) const {
+        return std::pair<GenericReply<ReplyType>, GenericError>::second;
+    }
 };
 
 template<typename Reply, typename Cookie>
-ReplyError<Reply> getReply1(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie)
-{
+ReplyError<Reply> getReply1(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie) {
     xcb_generic_error_t* error = nullptr;
     Reply* reply = func(conn, cookie, & error);
     return ReplyError<Reply>(reply, error);
 }
 
-struct XcbPropertyReply : GenericReply<xcb_get_property_reply_t>
-{
-    uint32_t length(void) { return xcb_get_property_value_length(get()); }
-    void* value(void) { return xcb_get_property_value(get()); }
+struct XcbPropertyReply : GenericReply<xcb_get_property_reply_t> {
+    uint32_t length(void) {
+        return xcb_get_property_value_length(get());
+    }
+    void* value(void) {
+        return xcb_get_property_value(get());
+    }
 
     XcbPropertyReply(xcb_get_property_reply_t* ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
-    XcbPropertyReply( GenericReply<xcb_get_property_reply_t> && ptr) noexcept : GenericReply<xcb_get_property_reply_t>(std::move(ptr)) {}
+    XcbPropertyReply(GenericReply<xcb_get_property_reply_t> && ptr) noexcept : GenericReply<xcb_get_property_reply_t>(std::move(ptr)) {}
 };
 
-struct XcbConnection
-{
-protected:
+struct XcbConnection {
+  protected:
     std::unique_ptr<xcb_connection_t, decltype(xcb_disconnect)*> conn;
     std::unique_ptr<xkb_context, decltype(xkb_context_unref)*> xkbctx;
     std::unique_ptr<xkb_keymap, decltype(xkb_keymap_unref)*> xkbmap;
@@ -119,9 +122,9 @@ protected:
     xcb_atom_t atomUtf8String;
     bool toDebug = false;
 
-public:
+  public:
     XcbConnection(bool debug);
-    virtual ~XcbConnection(){}
+    virtual ~XcbConnection() {}
 
     GenericError checkRequest(const xcb_void_cookie_t &) const;
 
@@ -150,30 +153,34 @@ public:
     QStringList getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
 
     template<typename Reply, typename Cookie>
-    ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
-    {
+    ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const {
         return getReply1<Reply, Cookie>(func, conn.get(), cookie);
     }
 
 #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,NAME(conn,##__VA_ARGS__))
 };
 
-class XcbEventsPool : public QThread, public XcbConnection
-{
+class XcbEventsPool : public QThread, public XcbConnection {
     Q_OBJECT
 
-    std::atomic<bool> shutdown;
+    xcb_atom_t appShutdown;
 
-public:
+  public:
     XcbEventsPool(bool debug, QObject*);
     ~XcbEventsPool();
 
-protected:
+  protected:
+    void stop() noexcept;
     void run() override;
 
-signals:
+    bool xkbMapEvent(const xcb_xkb_map_notify_event_t*);
+    bool xkbNewKeyboardEvent(const xcb_xkb_new_keyboard_notify_event_t*);
+    bool xkbStateEvent(const xcb_xkb_state_notify_event_t*);
+
+  signals:
     void keycodePressNotify(int, int);
     void windowTitleNotify(int);
+    void destroyWindowNotify(int);
     void activeWindowNotify(int);
     void shutdownNotify(void);
     void xkbNewKeyboardNotify(int);
@@ -184,8 +191,7 @@ signals:
 
 enum LayoutState { StateNormal, StateFirst, StateFixed };
 
-class MainSettings : public QWidget
-{
+class MainSettings : public QWidget {
     Q_OBJECT
 
     // std::unique_ptr<QDBusInterface> dbusInterfacePtr;
@@ -199,7 +205,7 @@ class MainSettings : public QWidget
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     QSoundEffect soundClick;
 #else
-    QSound soundClick{":/sounds/small2"};
+    QSound soundClick {":/sounds/small2"};
 #endif
     QString startupCmd;
     QStringList skipClasses;
@@ -208,11 +214,11 @@ class MainSettings : public QWidget
     bool forceReload = false;
     bool toDebug = false;
 
-public:
+  public:
     explicit MainSettings(const QString & config, QWidget *parent = 0);
     ~MainSettings();
 
-protected:
+  protected:
     void closeEvent(QCloseEvent*) override;
     void showEvent(QShowEvent*) override;
     void hideEvent(QHideEvent*) override;
@@ -226,13 +232,15 @@ protected:
     bool configLoadLocal(void);
     bool configLoadGlobal(const QString &);
     void initXkbLayoutIcons(void);
+    void startupModmap(void);
     void startupProcess(void);
     void windowRestoreTitle(xcb_window_t);
     void windowUpdateTitle(xcb_window_t, const QString &, const QString &);
 
-private slots:
+  private slots:
     void iconActivated(QSystemTrayIcon::ActivationReason reason);
     void exitProgram(void);
+    void windowRemoved(int);
     void activeWindowChanged(int);
     void xkbStateChanged(int);
     void xkbNewKeyboardChanged(int);
@@ -249,7 +257,7 @@ private slots:
     void periodicChecked(bool);
     void screenSaverActiveChanged(bool);
 
-signals:
+  signals:
     void iconAttributeNotify(void);
 };
 
