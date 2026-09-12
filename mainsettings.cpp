@@ -164,7 +164,11 @@ void MainSettings::startupModmap(void) {
             process.setProgram("xmodmap");
             process.setArguments({conf.c_str()});
             process.start(QIODevice::NotOpen);
-            process.waitForFinished();
+            if(!process.waitForFinished(3000)) {
+                process.kill();
+                process.waitForFinished();
+            }
+            QCoreApplication::processEvents();
         }
     };
 
@@ -193,10 +197,13 @@ void MainSettings::startupProcess(void) {
 
         process.start(QIODevice::NotOpen);
 
-        if(process.waitForFinished()) {
-            startupCmd = ui->lineEditStartup->text();
+        if(!process.waitForFinished(3000)) {
+            process.kill();
+            process.waitForFinished();
         }
+        QCoreApplication::processEvents();
 
+        startupCmd = ui->lineEditStartup->text();
         forceReload = false;
 
         startupModmap();
