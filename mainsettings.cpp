@@ -160,15 +160,9 @@ MainSettings::~MainSettings() {
 void MainSettings::startupModmap(void) {
     auto runXmodmap = [this](const std::filesystem::path & conf) {
         if(std::filesystem::exists(conf)) {
-            QProcess process(this);
-            process.setProgram("xmodmap");
-            process.setArguments({conf.c_str()});
-            process.start(QIODevice::NotOpen);
-            if(!process.waitForFinished(3000)) {
-                process.kill();
-                process.waitForFinished();
-            }
-            QCoreApplication::processEvents();
+            QProcess::startDetached("xmodmap", {conf.c_str()});
+        } else {
+            qWarning() << "conf failed: " << conf.c_str();
         }
     };
 
@@ -191,17 +185,7 @@ void MainSettings::startupProcess(void) {
             qWarning() << "cmd: " << cmd << args;
         }
 
-        QProcess process(this);
-        process.setProgram(cmd);
-        process.setArguments(args);
-
-        process.start(QIODevice::NotOpen);
-
-        if(!process.waitForFinished(3000)) {
-            process.kill();
-            process.waitForFinished();
-        }
-        QCoreApplication::processEvents();
+        QProcess::startDetached(cmd, args);
 
         startupCmd = ui->lineEditStartup->text();
         forceReload = false;
