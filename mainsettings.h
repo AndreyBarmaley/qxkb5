@@ -23,7 +23,7 @@
 #ifndef MAINSETTINGS_H
 #define MAINSETTINGS_H
 
-#define VERSION 20260909
+#define VERSION 20260916
 
 #include <QIcon>
 #include <QList>
@@ -120,7 +120,7 @@ struct XcbConnection {
     xcb_atom_t atomActiveWindow;
     xcb_atom_t atomNetWmName;
     xcb_atom_t atomUtf8String;
-    bool toDebug = false;
+    bool toDebug = true;
 
   public:
     XcbConnection(bool debug);
@@ -211,7 +211,6 @@ class MainSettings : public QWidget {
     QStringList skipClasses;
     xcb_window_t prevWindow = XCB_WINDOW_NONE;
     int periodicCheckXkbRules = 0;
-    bool forceReload = false;
     bool toDebug = false;
 
   public:

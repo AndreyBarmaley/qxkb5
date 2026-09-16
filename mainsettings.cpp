@@ -141,9 +141,12 @@ MainSettings::MainSettings(const QString & globalConfigPath, QWidget *parent) : 
     connect(xcb, SIGNAL(xkbNamesChanged()), this, SLOT(iconAttributeChanged()));
     connect(this, SIGNAL(iconAttributeNotify()), this, SLOT(iconAttributeChanged()));
 
+    ui->checkBoxPeriodicCheck->setVisible(false);
+    /*
     if(ui->checkBoxPeriodicCheck->isChecked()) {
         periodicCheckXkbRules = startTimer(std::chrono::seconds(2));
     }
+    */
 
     // start events pool thread mode
     xcb->start();
@@ -188,8 +191,6 @@ void MainSettings::startupProcess(void) {
         QProcess::startDetached(cmd, args);
 
         startupCmd = ui->lineEditStartup->text();
-        forceReload = false;
-
         startupModmap();
     }
 }
@@ -223,7 +224,7 @@ void MainSettings::timerEvent(QTimerEvent* ev) {
                 qWarning() << "names1: " << names1 << "names2: " << names2;
             }
 
-            if(forceReload || names1.size() != names2.size()) {
+            if(names1.size() != names2.size()) {
                 startupProcess();
             }
         }
@@ -786,7 +787,7 @@ void MainSettings::xkbNewKeyboardChanged(int changed) {
     }
 
     if(changed & XCB_XKB_NKN_DETAIL_GEOMETRY) {
-        forceReload = true;
+        startupProcess();
     }
 }
 
@@ -975,10 +976,26 @@ XcbConnection::XcbConnection(bool debug) :
 
     // XCB_XKB_MAP_PART_KEY_TYPES, XCB_XKB_MAP_PART_KEY_SYMS, XCB_XKB_MAP_PART_MODIFIER_MAP, XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS
     // XCB_XKB_MAP_PART_KEY_ACTIONS, XCB_XKB_MAP_PART_VIRTUAL_MODS, XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP
-    uint16_t required_map_parts = 0;
-    uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
+    uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY |
+                               XCB_XKB_EVENT_TYPE_MAP_NOTIFY |
+                               XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
+    uint16_t required_map_parts = XCB_XKB_MAP_PART_KEY_TYPES |
+                                  XCB_XKB_MAP_PART_KEY_SYMS |
+                                  XCB_XKB_MAP_PART_MODIFIER_MAP;
 
-    auto cookie = xcb_xkb_select_events_checked(conn.get(), xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
+    xcb_xkb_select_events_details_t details{};
+
+    // XCB_XKB_NKN_DETAIL_KEYCODES XCB_XKB_NKN_DETAIL_GEOMETRY XCB_XKB_NKN_DETAIL_DEVICE_ID
+    details.affectNewKeyboard = XCB_XKB_NKN_DETAIL_KEYCODES |
+                                XCB_XKB_NKN_DETAIL_GEOMETRY |
+                                XCB_XKB_NKN_DETAIL_DEVICE_ID;
+    details.newKeyboardDetails = details.affectNewKeyboard;
+
+    details.affectState = XCB_XKB_STATE_PART_GROUP_STATE;
+    details.stateDetails = details.affectState;
+
+    auto cookie = xcb_xkb_select_events_aux_checked(conn.get(), xkbdevid,
+                  required_events, 0, required_events, required_map_parts, required_map_parts, &details);
 
     if(GenericError(xcb_request_check(conn.get(), cookie))) {
         throw std::runtime_error("xcb_xkb_select_events");
@@ -1309,7 +1326,7 @@ void XcbEventsPool::run(void) {
         }
 
         if(resetMapState) {
-            qWarning() << "reset map state!";
+            qWarning() << "reset map state";
 
             // free state first
             xkbstate.reset();
@@ -1366,8 +1383,7 @@ bool XcbEventsPool::xkbMapEvent(const xcb_xkb_map_notify_event_t* mn) {
                    arg((int) mn->time);
     }
 
-    // resetMapState
-    return true;
+    return false;
 }
 
 bool XcbEventsPool::xkbNewKeyboardEvent(const xcb_xkb_new_keyboard_notify_event_t* kn) {
@@ -1389,10 +1405,6 @@ bool XcbEventsPool::xkbNewKeyboardEvent(const xcb_xkb_new_keyboard_notify_event_
         uint8_t         pad0[14];
     } xcb_xkb_new_keyboard_notify_event_t;
     */
-    //if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
-    //    resetMapState = true;
-
-    // changed: XCB_XKB_NKN_DETAIL_KEYCODES = 1, XCB_XKB_NKN_DETAIL_GEOMETRY = 2, XCB_XKB_NKN_DETAIL_DEVICE_ID  = 4
 
     if(toDebug) {
         qWarning() << QString("new keyboard notify - xkbType: %1, deviceID: (%2,%3,%4), keyCode: (%5,%6), oldKeyCode: (%7,%8), chaged: 0x%9, time: %10").
@@ -1408,17 +1420,13 @@ bool XcbEventsPool::xkbNewKeyboardEvent(const xcb_xkb_new_keyboard_notify_event_
                    arg((int) kn->time);
     }
 
-    /*
-        // wifi mouse
-        "new keyboard notify - xkbType: 0, deviceID: (3,3,3), keyCode: (8,255), oldKeyCode: (8,255), chaged: 0x0002, time: 1557398869"
-        "new keyboard notify - xkbType: 0, deviceID: (3,5,5), keyCode: (8,255), oldKeyCode: (8,255), chaged: 0x0002, time: 1557398869"
-        "new keyboard notify - xkbType: 0, deviceID: (3,6,6), keyCode: (8,255), oldKeyCode: (8,255), chaged: 0x0002, time: 1557398869"
-    */
-    if(xkbdevid == kn->deviceID) {
+    if(xkbdevid == kn->oldDeviceID) {
         emit xkbNewKeyboardNotify(kn->changed);
+
+        // resetMapState
+        return (kn->changed & XCB_XKB_NKN_DETAIL_GEOMETRY);
     }
 
-    // resetMapState
     return false;
 }
 
@@ -1451,36 +1459,38 @@ bool XcbEventsPool::xkbStateEvent(const xcb_xkb_state_notify_event_t* sn) {
         uint8_t         requestMinor;
     } xcb_xkb_state_notify_event_t;
     */
-    if(toDebug) {
-        qWarning() << QString("new state notify - xkbType: %1, deviceID: %2, mods1(0x%3,0x%4,0x%5,0x%6), group(0x%7,0x%8,0x%9,0x%10), compatState: 0x%11, mods2(0x%12,0x%13,0x%14,0x%15), ptrBtnState: 0x%16, changed: 0x%17, keycode: %18, time: %19").
-                   arg((int) sn->xkbType).
-                   arg((int) sn->deviceID).
-                   arg((int) sn->mods, 2, 16, QChar('0')).
-                   arg((int) sn->baseMods, 2, 16, QChar('0')).
-                   arg((int) sn->latchedMods, 2, 16, QChar('0')).
-                   arg((int) sn->lockedMods, 2, 16, QChar('0')).
-                   arg((int) sn->group, 2, 16, QChar('0')).
-                   arg((int) sn->baseGroup, 4, 16, QChar('0')).
-                   arg((int) sn->latchedGroup, 4, 16, QChar('0')).
-                   arg((int) sn->lockedGroup, 2, 16, QChar('0')).
-                   arg((int) sn->compatState, 2, 16, QChar('0')).
-                   arg((int) sn->grabMods, 2, 16, QChar('0')).
-                   arg((int) sn->compatGrabMods, 2, 16, QChar('0')).
-                   arg((int) sn->lookupMods, 2, 18, QChar('0')).
-                   arg((int) sn->compatLoockupMods, 2, 18, QChar('0')).
-                   arg((int) sn->ptrBtnState, 4, 16, QChar('0')).
-                   arg((int) sn->changed, 4, 16, QChar('0')).
-                   arg((int) sn->keycode).
-                   arg((int) sn->time);
+
+    if(sn->changed & (XCB_XKB_STATE_PART_MODIFIER_STATE | XCB_XKB_STATE_PART_GROUP_STATE)) {
+        if(toDebug) {
+            qWarning() << QString("new state notify - xkbType: %1, deviceID: %2, mods1(0x%3,0x%4,0x%5,0x%6), group(0x%7,0x%8,0x%9,0x%10), compatState: 0x%11, mods2(0x%12,0x%13,0x%14,0x%15), ptrBtnState: 0x%16, changed: 0x%17, keycode: %18, time: %19").
+                       arg((int) sn->xkbType).
+                       arg((int) sn->deviceID).
+                       arg((int) sn->mods, 2, 16, QChar('0')).
+                       arg((int) sn->baseMods, 2, 16, QChar('0')).
+                       arg((int) sn->latchedMods, 2, 16, QChar('0')).
+                       arg((int) sn->lockedMods, 2, 16, QChar('0')).
+                       arg((int) sn->group, 2, 16, QChar('0')).
+                       arg((int) sn->baseGroup, 4, 16, QChar('0')).
+                       arg((int) sn->latchedGroup, 4, 16, QChar('0')).
+                       arg((int) sn->lockedGroup, 2, 16, QChar('0')).
+                       arg((int) sn->compatState, 2, 16, QChar('0')).
+                       arg((int) sn->grabMods, 2, 16, QChar('0')).
+                       arg((int) sn->compatGrabMods, 2, 16, QChar('0')).
+                       arg((int) sn->lookupMods, 2, 18, QChar('0')).
+                       arg((int) sn->compatLoockupMods, 2, 18, QChar('0')).
+                       arg((int) sn->ptrBtnState, 4, 16, QChar('0')).
+                       arg((int) sn->changed, 4, 16, QChar('0')).
+                       arg((int) sn->keycode).
+                       arg((int) sn->time);
+        }
+
+        xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
+                              sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+
+        if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE) {
+            emit xkbStateNotify(sn->group);
+        }
     }
 
-    xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
-                          sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
-
-    if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE) {
-        emit xkbStateNotify(sn->group);
-    }
-
-    // resetMapState
     return false;
 }
